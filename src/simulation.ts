@@ -25,6 +25,12 @@ export class AquariumSimulation {
     actionText: string;
     actionTextTimer: number;
     isRunning: boolean;
+    catPawX: number = 0;
+    catPawY: number = -300;
+    catPawActive: boolean = false;
+    catPawTimer: number = 0;
+    catPawState: 'idle' | 'reaching' | 'grabbing' | 'retracting' = 'idle';
+    catPawTargetFish: Fish | null = null;
     lastTime: number | null;
     simInterval: any;
     animFrameId: number;
@@ -145,20 +151,27 @@ export class AquariumSimulation {
         this.onUpdateUI(this);
     }
 
-    spawnFish(id: string) {
+    spawnFish(id: string, x?: number, y?: number, isBaby = false) {
         const f = FISH_DB.find(x => x.id === id) || SHRIMP_DB.find(x => x.id === id) || SNAIL_DB.find(x => x.id === id); 
         if(!f) return;
-        this.fishes.push({
+        const newFish: Fish = {
             ...f, 
-            x: Math.random()*(this.canvas.width-100)+50, 
-            y: Math.random()*(this.canvas.height-150)+50, 
+            x: x ?? Math.random()*(this.canvas.width-100)+50, 
+            y: y ?? Math.random()*(this.canvas.height-150)+50, 
             vx: 0, vy: 0, 
             targetVx: (Math.random()-0.5)*3, 
             targetVy: (Math.random()-0.5)*1, 
             swimCycle: Math.random() * Math.PI * 2, 
             health: 100, isDead: false, hunger: 0, 
-            targetY: f.shape==='bottom'||f.shape==='shrimp'||f.shape==='snail'?this.canvas.height-30:null 
-        });
+            targetY: f.shape==='bottom'||f.shape==='shrimp'||f.shape==='snail'?this.canvas.height-30:null,
+            size: isBaby ? f.size * 0.4 : f.size * 0.7,
+            maxSize: f.size * (1.2 + Math.random() * 0.4),
+            growthRate: 0.005 + Math.random() * 0.01,
+            age: isBaby ? 0 : 50,
+            isPregnant: false,
+            pregnancyTime: 0
+        };
+        this.fishes.push(newFish);
     }
 
     spawnPlant(id: string, x: number) {
@@ -225,6 +238,18 @@ export class AquariumSimulation {
             };
         }
         this.recalcPipelineStats();
+    }
+
+    movePipelineNode(index: number, direction: 'left' | 'right') {
+        const newIndex = direction === 'left' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= this.pipeline.length) return;
+        
+        const temp = this.pipeline[index];
+        this.pipeline[index] = this.pipeline[newIndex];
+        this.pipeline[newIndex] = temp;
+        
+        this.recalcPipelineStats();
+        this.onUpdateUI(this);
     }
 
     updateSlot(nodeIdx: number, slotIdx: number, mediaType: string) {
@@ -371,6 +396,33 @@ export class AquariumSimulation {
             fish.hunger += 2;
             if(this.water.food > 0 && fish.hunger > 60) { this.water.food -= 1; fish.hunger = 0; fish.health = Math.min(100, fish.health + 5); }
 
+            // Growth
+            if(fish.hunger < 50 && fish.size < fish.maxSize) {
+                fish.size += fish.growthRate * dilution;
+            }
+            fish.age = (fish.age || 0) + 1 * dilution;
+
+            // Breeding
+            if(!fish.isPregnant && fish.size > fish.maxSize * 0.8 && this.water.no3 < 15 && this.water.nh3 < 0.05 && this.water.o2 > 6) {
+                if(Math.random() < 0.005 * dilution) {
+                    fish.isPregnant = true;
+                    fish.pregnancyTime = 24; 
+                    this.showActionText(`💖 ${fish.name} 準備產卵了`);
+                }
+            }
+
+            if(fish.isPregnant) {
+                fish.pregnancyTime = (fish.pregnancyTime || 0) - 1 * dilution;
+                if(fish.pregnancyTime <= 0) {
+                    fish.isPregnant = false;
+                    const babyCount = Math.floor(Math.random() * 3) + 1;
+                    for(let i=0; i<babyCount; i++) {
+                        this.spawnFish(fish.id, fish.x, fish.y, true);
+                    }
+                    this.showActionText(`🐣 ${fish.name} 產下了幼魚！`);
+                }
+            }
+
             let damage = 0;
             let minPh = (fish.id === 'discus' || fish.id === 'ram') ? 6.2 : 5.8;
             let maxPh = (fish.id === 'discus' || fish.id === 'ram') ? 7.2 : 8.2;
@@ -429,6 +481,17 @@ export class AquariumSimulation {
         
         let targetPh = 7.0 + (this.water.kh - 4.0) * 0.05 - (this.water.no3 * 0.005) - (this.water.nh3 * 0.1) + (this.lightOn ? 0.2 : -0.1);
         this.water.ph += (Math.max(5.0, Math.min(9.0, targetPh)) - this.water.ph) * 0.05;
+
+        // Cat Event Trigger
+        if(!this.catPawActive && Math.random() < 0.001 * dilution) {
+            this.catPawActive = true;
+            this.catPawState = 'reaching';
+            this.catPawX = Math.random() * this.canvas.width;
+            this.catPawY = -300;
+            this.catPawTimer = 0;
+            this.catPawTargetFish = aliveFish.length > 0 ? aliveFish[Math.floor(Math.random() * aliveFish.length)] : null;
+            this.showActionText('⚠️ 警告：有貓出沒！');
+        }
     }
 
     renderLoop(timestamp: number) {
@@ -442,10 +505,10 @@ export class AquariumSimulation {
 
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // 1. Realistic Background Gradient
+        // 1. Realistic Background Gradient (Brightened)
         const bgGrad = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-        bgGrad.addColorStop(0, '#0c4a6e'); // Deep blue top
-        bgGrad.addColorStop(1, '#082f49'); // Darker blue bottom
+        bgGrad.addColorStop(0, '#38bdf8'); // Brighter blue top (Sky 400)
+        bgGrad.addColorStop(1, '#0284c7'); // Rich blue bottom (Sky 600)
         this.ctx.fillStyle = bgGrad;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -453,7 +516,7 @@ export class AquariumSimulation {
         const waterHeight = this.canvas.height * (this.water.level / 100);
         const waterY = this.canvas.height - waterHeight;
         
-        this.ctx.fillStyle = `rgba(${100 - algaeRatio*60}, ${190 + algaeRatio*30}, ${240 - algaeRatio*140}, ${0.3 + algaeRatio*0.4})`;
+        this.ctx.fillStyle = `rgba(${100 - algaeRatio*60}, ${190 + algaeRatio*30}, ${240 - algaeRatio*140}, ${0.15 + algaeRatio*0.4})`;
         this.ctx.beginPath();
         this.ctx.moveTo(0, this.canvas.height);
         this.ctx.lineTo(0, waterY);
@@ -466,7 +529,7 @@ export class AquariumSimulation {
 
         if (this.lightOn) {
             this.ctx.globalCompositeOperation = 'screen';
-            this.ctx.fillStyle = `rgba(255, 255, 255, ${0.05 - algaeRatio*0.04})`; 
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${0.12 - algaeRatio*0.08})`; 
             for(let i=0; i<6; i++) {
                 this.ctx.beginPath();
                 let cx = this.canvas.width * 0.2 * i + Math.sin(timestamp*0.0003 + i)*100;
@@ -581,6 +644,50 @@ export class AquariumSimulation {
             this.ctx.beginPath(); this.ctx.arc(f.x, f.y, 2, 0, Math.PI * 2); this.ctx.fill();
         }
 
+        // 3. Draw Cat Paw
+        if(this.catPawActive) {
+            this.catPawTimer += timeScale;
+            if(this.catPawState === 'reaching') {
+                this.catPawY += 5 * timeScale;
+                if(this.catPawY > 100) this.catPawState = 'grabbing';
+            } else if(this.catPawState === 'grabbing') {
+                if(this.catPawTargetFish && !this.catPawTargetFish.isDead) {
+                    this.catPawX += (this.catPawTargetFish.x - this.catPawX) * 0.05 * timeScale;
+                    this.catPawY += (this.catPawTargetFish.y - this.catPawY) * 0.05 * timeScale;
+                    const dist = Math.hypot(this.catPawX - this.catPawTargetFish.x, this.catPawY - this.catPawTargetFish.y);
+                    if(dist < 30) {
+                        this.catPawTargetFish.isDead = true;
+                        this.fishes = this.fishes.filter(f => f !== this.catPawTargetFish);
+                        this.showActionText(`😿 糟糕！${this.catPawTargetFish.name} 被貓抓走了！`);
+                        this.catPawState = 'retracting';
+                    }
+                }
+                if(this.catPawTimer > 200) this.catPawState = 'retracting';
+            } else if(this.catPawState === 'retracting') {
+                this.catPawY -= 8 * timeScale;
+                if(this.catPawY < -300) {
+                    this.catPawActive = false;
+                    this.catPawState = 'idle';
+                }
+            }
+            this.ctx.save();
+            this.ctx.translate(this.catPawX, this.catPawY);
+            this.ctx.fillStyle = '#f97316';
+            this.ctx.beginPath();
+            this.ctx.roundRect(-40, -600, 80, 600, 20);
+            this.ctx.fill();
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, 45, 0, Math.PI*2);
+            this.ctx.fill();
+            this.ctx.fillStyle = '#ffedd5';
+            for(let i=-1; i<=1; i++) {
+                this.ctx.beginPath();
+                this.ctx.arc(i*25, 15, 15, 0, Math.PI*2);
+                this.ctx.fill();
+            }
+            this.ctx.restore();
+        }
+
         for(let fish of this.fishes) {
             let topBound = waterY + 15; let bottomBound = this.canvas.height - 30;
             if(!fish.isDead) {
@@ -601,6 +708,25 @@ export class AquariumSimulation {
                 fish.y -= 0.5 * timeScale; if(fish.y < topBound - 10) fish.y = topBound - 10;
             }
             this.ctx.save(); this.ctx.translate(fish.x, fish.y);
+            
+            // Draw Crown if fully grown
+            if(fish.size >= fish.maxSize * 0.95 && !fish.isDead) {
+                this.ctx.save();
+                this.ctx.translate(0, -fish.size * 1.2);
+                this.ctx.fillStyle = '#fbbf24';
+                this.ctx.beginPath();
+                this.ctx.moveTo(-fish.size*0.4, 0);
+                this.ctx.lineTo(-fish.size*0.5, -fish.size*0.5);
+                this.ctx.lineTo(-fish.size*0.2, -fish.size*0.3);
+                this.ctx.lineTo(0, -fish.size*0.6);
+                this.ctx.lineTo(fish.size*0.2, -fish.size*0.3);
+                this.ctx.lineTo(fish.size*0.5, -fish.size*0.5);
+                this.ctx.lineTo(fish.size*0.4, 0);
+                this.ctx.closePath();
+                this.ctx.fill();
+                this.ctx.restore();
+            }
+
             if(!fish.isDead) {
                 let tilt = (fish.shape !== 'shrimp' && fish.shape !== 'snail') ? Math.atan2(fish.vy, Math.max(0.1, Math.abs(fish.vx))) * 0.7 : 0;
                 if(fish.tilt === undefined) fish.tilt = 0; fish.tilt += (tilt - fish.tilt) * 0.1 * timeScale;

@@ -205,7 +205,7 @@ const App: React.FC = () => {
                 <div className="xl:col-span-2 flex flex-col gap-2 sm:gap-3">
                     <div id="tank-container" className="relative w-full aspect-video rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-slate-600 bg-black transition-all overflow-hidden">
                         <canvas ref={canvasRef} width={2000} height={1000} className="absolute top-0 left-0 w-full h-full z-10 block"></canvas>
-                        <div className={`absolute inset-0 bg-slate-950 pointer-events-none transition-opacity duration-1000 z-20 ${lightOn ? 'opacity-0' : 'opacity-60'}`}></div>
+                        <div className={`absolute inset-0 bg-slate-950 pointer-events-none transition-opacity duration-1000 z-20 ${lightOn ? 'opacity-0' : 'opacity-40'}`}></div>
                         {isLeaking && (
                             <div className="absolute inset-0 bg-red-500/20 z-30 flex items-center justify-center pointer-events-none">
                                 <div className="bg-red-600/95 text-white px-4 sm:px-8 py-2 sm:py-4 rounded-xl font-bold text-lg sm:text-2xl md:text-3xl tracking-widest animate-pulse border-2 border-white shadow-[0_0_30px_rgba(239,68,68,0.8)] flex items-center gap-2 sm:gap-4 text-center">
@@ -545,6 +545,23 @@ const App: React.FC = () => {
                                             </div>
                                         ) : (
                                             <div className="space-y-4">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <button 
+                                                        onClick={() => { sim.movePipelineNode(selectedNode, 'left'); setSelectedNode(selectedNode - 1); }}
+                                                        disabled={selectedNode === 0}
+                                                        className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white py-1.5 rounded border border-slate-700 text-[10px] font-bold transition"
+                                                    >
+                                                        <i className="fa-solid fa-arrow-left mr-1"></i> 向左移動
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => { sim.movePipelineNode(selectedNode, 'right'); setSelectedNode(selectedNode + 1); }}
+                                                        disabled={selectedNode === sim.pipeline.length - 1}
+                                                        className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white py-1.5 rounded border border-slate-700 text-[10px] font-bold transition"
+                                                    >
+                                                        向右移動 <i className="fa-solid fa-arrow-right ml-1"></i>
+                                                    </button>
+                                                </div>
+
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
                                                         <div className="text-[8px] text-slate-500 font-bold uppercase mb-1">組件性能</div>

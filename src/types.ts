@@ -3,6 +3,8 @@ export interface Fish {
     name: string;
     cost: number;
     size: number;
+    maxSize: number;
+    growthRate: number;
     bioLoad: number;
     color: string;
     shape: string;
@@ -19,6 +21,9 @@ export interface Fish {
     hunger: number;
     targetY: number | null;
     tilt?: number;
+    isPregnant?: boolean;
+    pregnancyTime?: number;
+    age?: number;
 }
 
 export interface Plant {
