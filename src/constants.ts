@@ -1,30 +1,30 @@
 export const FISH_DB = [
-    { id: 'guppy', name: '孔雀魚', cost: 10, size: 32, bioLoad: 1.0, color: '#f97316', shape: 'normal', desc: '好養，適應力強' },
-    { id: 'tetra', name: '紅蓮燈', cost: 15, size: 24, bioLoad: 0.8, color: '#ef4444', shape: 'slim', desc: '水草缸絕配，體型小' },
-    { id: 'goldfish', name: '小金魚', cost: 20, size: 56, bioLoad: 5.0, color: '#fbbf24', shape: 'round', desc: '超級吃貨，高污染！' },
-    { id: 'cory', name: '熊貓鼠', cost: 25, size: 36, bioLoad: 1.5, color: '#fef08a', shape: 'bottom', desc: '底棲魚，清理殘餌' },
-    { id: 'pleco', name: '小精靈', cost: 30, size: 36, bioLoad: 1.2, color: '#4b5563', shape: 'bottom', desc: '底棲，喜歡吃藻類' },
-    { id: 'betta', name: '鬥魚', cost: 50, size: 48, bioLoad: 1.5, color: '#3b82f6', shape: 'flowing', desc: '美麗但怕強水流' },
-    { id: 'angelfish', name: '神仙魚', cost: 60, size: 64, bioLoad: 3.0, color: '#e2e8f0', shape: 'tall', desc: '優雅的側扁體型' },
-    { id: 'zebra', name: '斑馬魚', cost: 12, size: 28, bioLoad: 0.9, color: '#d946ef', shape: 'slim', desc: '極度活潑，群游性強' },
-    { id: 'molly', name: '黑茉莉', cost: 18, size: 40, bioLoad: 1.5, color: '#1e293b', shape: 'normal', desc: '會吃水面油膜與微小藻類' },
-    { id: 'swordtail', name: '紅劍魚', cost: 22, size: 44, bioLoad: 1.6, color: '#dc2626', shape: 'slim', desc: '尾部有標誌性劍狀延伸' },
-    { id: 'discus', name: '七彩神仙', cost: 150, size: 72, bioLoad: 4.5, color: '#0ea5e9', shape: 'round', desc: '熱帶魚之王，飼養難度高' },
-    { id: 'piranha', name: '紅腹食人魚', cost: 120, size: 52, bioLoad: 4.0, color: '#ef4444', shape: 'normal', desc: '極度兇猛，會獵食缸內其他魚蝦' }
+    { id: 'guppy', name: '孔雀魚', cost: 10, size: 64, bioLoad: 1.0, color: '#f97316', shape: 'normal', desc: '好養，適應力強' },
+    { id: 'tetra', name: '紅蓮燈', cost: 15, size: 52, bioLoad: 0.8, color: '#ef4444', shape: 'slim', desc: '水草缸絕配，體型小' },
+    { id: 'goldfish', name: '小金魚', cost: 20, size: 100, bioLoad: 5.0, color: '#fbbf24', shape: 'round', desc: '超級吃貨，高污染！' },
+    { id: 'cory', name: '熊貓鼠', cost: 25, size: 68, bioLoad: 1.5, color: '#fef08a', shape: 'bottom', desc: '底棲魚，清理殘餌' },
+    { id: 'pleco', name: '小精靈', cost: 30, size: 68, bioLoad: 1.2, color: '#4b5563', shape: 'bottom', desc: '底棲，喜歡吃藻類' },
+    { id: 'betta', name: '鬥魚', cost: 50, size: 84, bioLoad: 1.5, color: '#3b82f6', shape: 'flowing', desc: '美麗但怕強水流' },
+    { id: 'angelfish', name: '神仙魚', cost: 60, size: 110, bioLoad: 3.0, color: '#e2e8f0', shape: 'tall', desc: '優雅的側扁體型' },
+    { id: 'zebra', name: '斑馬魚', cost: 12, size: 56, bioLoad: 0.9, color: '#d946ef', shape: 'slim', desc: '極度活潑，群游性強' },
+    { id: 'molly', name: '黑茉莉', cost: 18, size: 72, bioLoad: 1.5, color: '#1e293b', shape: 'normal', desc: '會吃水面油膜與微小藻類' },
+    { id: 'swordtail', name: '紅劍魚', cost: 22, size: 76, bioLoad: 1.6, color: '#dc2626', shape: 'slim', desc: '尾部有標誌性劍狀延伸' },
+    { id: 'discus', name: '七彩神仙', cost: 150, size: 120, bioLoad: 4.5, color: '#0ea5e9', shape: 'round', desc: '熱帶魚之王，飼養難度高' },
+    { id: 'piranha', name: '紅腹食人魚', cost: 120, size: 96, bioLoad: 4.0, color: '#ef4444', shape: 'normal', desc: '極度兇猛，會獵食缸內其他魚蝦' }
 ];
 
 export const SHRIMP_DB = [
-    { id: 'cherry_shrimp', name: '極火蝦', cost: 10, size: 20, bioLoad: 0.2, color: '#ef4444', shape: 'shrimp', desc: '紅通通的小型除藻蝦' },
-    { id: 'amano_shrimp', name: '大和藻蝦', cost: 18, size: 28, bioLoad: 0.3, color: '#a8a29e', shape: 'shrimp', desc: '除藻能力極強的大型蝦' },
-    { id: 'crs_shrimp', name: '水晶蝦', cost: 60, size: 20, bioLoad: 0.2, color: '#f8fafc', shape: 'shrimp', desc: '紅白相間，對水質極敏感' },
-    { id: 'yellow_shrimp', name: '黃金米蝦', cost: 12, size: 24, bioLoad: 0.2, color: '#eab308', shape: 'shrimp', desc: '金黃亮眼，清理底砂殘餌' },
-    { id: 'blue_shrimp', name: '藍絲絨蝦', cost: 20, size: 20, bioLoad: 0.2, color: '#3b82f6', shape: 'shrimp', desc: '夢幻藍色的高階米蝦' }
+    { id: 'cherry_shrimp', name: '極火蝦', cost: 10, size: 48, bioLoad: 0.2, color: '#ef4444', shape: 'shrimp', desc: '紅通通的小型除藻蝦' },
+    { id: 'amano_shrimp', name: '大和藻蝦', cost: 18, size: 60, bioLoad: 0.3, color: '#a8a29e', shape: 'shrimp', desc: '除藻能力極強的大型蝦' },
+    { id: 'crs_shrimp', name: '水晶蝦', cost: 60, size: 48, bioLoad: 0.2, color: '#f8fafc', shape: 'shrimp', desc: '紅白相間，對水質極敏感' },
+    { id: 'yellow_shrimp', name: '黃金米蝦', cost: 12, size: 52, bioLoad: 0.2, color: '#eab308', shape: 'shrimp', desc: '金黃亮眼，清理底砂殘餌' },
+    { id: 'blue_shrimp', name: '藍絲絨蝦', cost: 20, size: 48, bioLoad: 0.2, color: '#3b82f6', shape: 'shrimp', desc: '夢幻藍色的高階米蝦' }
 ];
 
 export const SNAIL_DB = [
-    { id: 'apple_snail', name: '蘋果螺', cost: 5, size: 28, bioLoad: 0.5, color: '#f87171', shape: 'snail', desc: '吃殘餌與微小藻類，容易爆殖' },
-    { id: 'nerite_snail', name: '蜜蜂角螺', cost: 15, size: 24, bioLoad: 0.2, color: '#eab308', shape: 'snail', desc: '最強除藻螺，黑黃相間不繁殖' },
-    { id: 'ramshorn', name: '斑馬螺', cost: 10, size: 28, bioLoad: 0.3, color: '#a8a29e', shape: 'snail', desc: '除缸壁綠斑藻效果好' }
+    { id: 'apple_snail', name: '蘋果螺', cost: 5, size: 60, bioLoad: 0.5, color: '#f87171', shape: 'snail', desc: '吃殘餌與微小藻類，容易爆殖' },
+    { id: 'nerite_snail', name: '蜜蜂角螺', cost: 15, size: 52, bioLoad: 0.2, color: '#eab308', shape: 'snail', desc: '最強除藻螺，黑黃相間不繁殖' },
+    { id: 'ramshorn', name: '斑馬螺', cost: 10, size: 60, bioLoad: 0.3, color: '#a8a29e', shape: 'snail', desc: '除缸壁綠斑藻效果好' }
 ];
 
 export const PLANT_DB = [

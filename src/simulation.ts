@@ -36,6 +36,13 @@ export class AquariumSimulation {
     animFrameId: number;
     onUpdateUI: (sim: AquariumSimulation) => void;
 
+    // Interactive Elements
+    intakeX: number = 50;
+    intakeY: number = 100;
+    outflowX: number = 1900;
+    outflowY: number = 100;
+    draggedItem: { type: 'intake' | 'outflow' | 'decoration' | null, index: number | null } = { type: null, index: null };
+
     constructor(canvas: HTMLCanvasElement, volume = 100, initialMoney = 300, loadData: SaveData | null = null, onUpdateUI: (sim: AquariumSimulation) => void) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d')!;
@@ -98,6 +105,76 @@ export class AquariumSimulation {
         this.recalcPipelineStats();
         this.animFrameId = requestAnimationFrame((t) => this.renderLoop(t));
         this.simInterval = setInterval(() => this.ecoTick(), this.tickRateMs);
+
+        // Event Listeners for Dragging
+        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
+        this.canvas.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            this.handleMouseDown(touch as any);
+        }, { passive: false });
+        this.canvas.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            this.handleMouseMove(touch as any);
+            e.preventDefault();
+        }, { passive: false });
+        this.canvas.addEventListener('touchend', () => this.handleMouseUp());
+    }
+
+    handleMouseDown(e: MouseEvent) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const mx = (e.clientX - rect.left) * scaleX;
+        const my = (e.clientY - rect.top) * scaleY;
+
+        // Check Intake
+        if (Math.hypot(mx - this.intakeX, my - this.intakeY) < 60) {
+            this.draggedItem = { type: 'intake', index: null };
+            return;
+        }
+        // Check Outflow
+        if (Math.hypot(mx - this.outflowX, my - this.outflowY) < 60) {
+            this.draggedItem = { type: 'outflow', index: null };
+            return;
+        }
+        // Check Decorations (Reverse order for top-most)
+        for (let i = this.decorations.length - 1; i >= 0; i--) {
+            const d = this.decorations[i];
+            if (Math.hypot(mx - d.x, my - d.y + 30) < 80) {
+                this.draggedItem = { type: 'decoration', index: i };
+                return;
+            }
+        }
+    }
+
+    handleMouseMove(e: MouseEvent) {
+        if (!this.draggedItem.type) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const mx = (e.clientX - rect.left) * scaleX;
+        const my = (e.clientY - rect.top) * scaleY;
+
+        const waterY = this.canvas.height - (this.canvas.height * (this.water.level / 100));
+
+        if (this.draggedItem.type === 'intake') {
+            this.intakeX = Math.max(20, Math.min(this.canvas.width - 20, mx));
+            this.intakeY = Math.max(waterY, Math.min(this.canvas.height - 100, my));
+        } else if (this.draggedItem.type === 'outflow') {
+            this.outflowX = Math.max(20, Math.min(this.canvas.width - 20, mx));
+            this.outflowY = Math.max(waterY, Math.min(this.canvas.height - 100, my));
+        } else if (this.draggedItem.type === 'decoration' && this.draggedItem.index !== null) {
+            const d = this.decorations[this.draggedItem.index];
+            d.x = Math.max(50, Math.min(this.canvas.width - 50, mx));
+            // Decorations stay on ground
+            d.y = this.canvas.height - 30;
+        }
+    }
+
+    handleMouseUp() {
+        this.draggedItem = { type: null, index: null };
     }
 
     stop() {
@@ -553,7 +630,44 @@ export class AquariumSimulation {
         this.ctx.fillStyle = '#2f271c'; this.ctx.fillRect(0, this.canvas.height - 30, this.canvas.width, 30);
         this.ctx.fillStyle = '#4a3f2d'; this.ctx.fillRect(0, this.canvas.height - 25, this.canvas.width, 25);
 
-        // 2. Draw Decorations
+        // 2. Draw Pipes (Intake & Outflow)
+        this.ctx.lineWidth = 12;
+        this.ctx.lineCap = 'round';
+        this.ctx.strokeStyle = 'rgba(200, 200, 200, 0.6)';
+        
+        // Intake Pipe
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.intakeX, -50);
+        this.ctx.lineTo(this.intakeX, this.intakeY);
+        this.ctx.stroke();
+        this.ctx.fillStyle = 'rgba(150, 150, 150, 0.8)';
+        this.ctx.fillRect(this.intakeX - 15, this.intakeY, 30, 40); // Strainer
+        for(let j=0; j<4; j++) {
+            this.ctx.strokeStyle = 'rgba(50, 50, 50, 0.5)';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(this.intakeX - 15, this.intakeY + j*10, 30, 1);
+        }
+
+        // Outflow Pipe
+        this.ctx.strokeStyle = 'rgba(200, 200, 200, 0.6)';
+        this.ctx.lineWidth = 12;
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.outflowX, -50);
+        this.ctx.lineTo(this.outflowX, this.outflowY);
+        this.ctx.lineTo(this.outflowX - 40, this.outflowY + 20);
+        this.ctx.stroke();
+        // Water flow effect from outflow
+        if (this.sysStats.isActive && timeScale > 0) {
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            for(let k=0; k<3; k++) {
+                const ox = this.outflowX - 45 - Math.random()*20;
+                const oy = this.outflowY + 25 + Math.random()*10;
+                this.ctx.beginPath(); this.ctx.arc(ox, oy, 3, 0, Math.PI*2); this.ctx.fill();
+                if(Math.random() < 0.1) this.bubbles.push({ x: ox, y: oy, size: 2+Math.random()*3, vy: 0.5+Math.random(), wobble: Math.random()*Math.PI*2 });
+            }
+        }
+
+        // 3. Draw Decorations
         this.decorations.forEach(d => {
             this.ctx.save();
             this.ctx.translate(d.x, d.y);
@@ -743,247 +857,284 @@ export class AquariumSimulation {
             } else { this.ctx.rotate(Math.PI); }
             this.ctx.fillStyle = fish.color;
             if (fish.shape === 'shrimp') {
-                // Kawaii Shrimp
-                this.ctx.beginPath(); 
-                // Rounder body segments
-                this.ctx.arc(0, -2, fish.size*0.7, 0, Math.PI*2); 
-                this.ctx.arc(-fish.size*0.8, -fish.size*0.2, fish.size*0.6, 0, Math.PI*2); 
-                this.ctx.arc(-fish.size*1.4, Math.sin(fish.swimCycle)*2, fish.size*0.5, 0, Math.PI*2); 
-                this.ctx.fill();
-                
-                // Species Specific Patterns for Shrimp
-                if (fish.id === 'crs_shrimp') { // Crystal Red: Red/White bands
-                    this.ctx.fillStyle = 'white';
-                    this.ctx.fillRect(-fish.size * 0.4, -fish.size * 0.8, fish.size * 0.4, fish.size * 1.2);
-                    this.ctx.fillRect(-fish.size * 1.1, -fish.size * 0.5, fish.size * 0.3, fish.size * 0.8);
-                } else if (fish.id === 'amano_shrimp') { // Amano: Translucent with dots
-                    this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
-                    for(let i=0; i<5; i++) {
-                        this.ctx.beginPath();
-                        this.ctx.arc(-fish.size * 0.2 * i, -fish.size * 0.2, 1.5, 0, Math.PI * 2);
-                        this.ctx.fill();
-                    }
-                }
+                // ULTRA KAWAII SHRIMP (Shrimp-Ball Style)
+                const pulse = Math.sin(timestamp * 0.005) * 0.1;
+                this.ctx.scale(1 + pulse, 1 + pulse);
 
-                // Rosy Cheeks
-                this.ctx.fillStyle = 'rgba(255, 182, 193, 0.6)';
-                this.ctx.beginPath();
-                this.ctx.arc(fish.size * 0.3, 0, fish.size * 0.2, 0, Math.PI * 2);
-                this.ctx.fill();
-
+                // Tiny Moving Legs (Crawling)
                 this.ctx.strokeStyle = fish.color;
-                this.ctx.lineWidth = 2;
-                // Cute Wiggling Legs
-                for(let i=0; i<3; i++) {
+                this.ctx.lineWidth = 3;
+                const legMove = Math.sin(fish.swimCycle * 4) * 5;
+                for (let i = 0; i < 3; i++) {
                     this.ctx.beginPath();
-                    this.ctx.moveTo(-fish.size*0.3 - i*fish.size*0.4, 0);
-                    this.ctx.lineTo(-fish.size*0.4 - i*fish.size*0.4, 6 + Math.sin(fish.swimCycle * 3 + i)*3);
+                    this.ctx.moveTo(-fish.size * 0.3 + i * fish.size * 0.3, fish.size * 0.5);
+                    this.ctx.lineTo(-fish.size * 0.5 + i * fish.size * 0.3 + legMove, fish.size * 0.9);
                     this.ctx.stroke();
                 }
-                // Long Cute Antennae
+
+                // Tiny Clapping Hands (Claws)
+                const handMove = Math.sin(timestamp * 0.01) * 5;
                 this.ctx.beginPath();
-                this.ctx.moveTo(fish.size * 0.5, -fish.size * 0.3);
-                this.ctx.quadraticCurveTo(fish.size * 1.8, -fish.size * 1.2 + Math.sin(fish.swimCycle)*8, fish.size * 2.8, -fish.size * 0.6);
-                this.ctx.moveTo(fish.size * 0.5, -fish.size * 0.1);
-                this.ctx.quadraticCurveTo(fish.size * 1.5, -fish.size * 0.4 + Math.cos(fish.swimCycle)*8, fish.size * 2.5, 0.2);
+                this.ctx.moveTo(fish.size * 0.5, fish.size * 0.3);
+                this.ctx.lineTo(fish.size * 0.8 + handMove, fish.size * 0.5);
                 this.ctx.stroke();
 
-                // Big Kawaii Eyes
+                this.ctx.beginPath(); 
+                // Very round head/body
+                this.ctx.arc(0, 0, fish.size * 0.8, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // Tiny curled tail
+                this.ctx.beginPath();
+                this.ctx.arc(-fish.size * 0.8, fish.size * 0.2 + Math.sin(fish.swimCycle)*2, fish.size * 0.4, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Species Patterns
+                if (fish.id === 'crs_shrimp') {
+                    this.ctx.fillStyle = 'white';
+                    this.ctx.fillRect(-fish.size * 0.2, -fish.size * 0.8, fish.size * 0.4, fish.size * 1.6);
+                } else if (fish.id === 'blue_shrimp') {
+                    this.ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                    this.ctx.beginPath(); this.ctx.arc(0, 0, fish.size * 0.5, 0, Math.PI*2); this.ctx.fill();
+                }
+
+                // Pulsing Rosy Cheeks
+                this.ctx.fillStyle = `rgba(255, 182, 193, ${0.4 + Math.sin(timestamp * 0.01) * 0.2})`;
+                this.ctx.beginPath();
+                this.ctx.arc(fish.size * 0.4, fish.size * 0.2, fish.size * 0.25, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Tiny Smile
+                this.ctx.strokeStyle = '#1e293b';
+                this.ctx.lineWidth = 1.5;
+                this.ctx.beginPath();
+                this.ctx.arc(fish.size * 0.6, fish.size * 0.1, fish.size * 0.15, 0.1 * Math.PI, 0.9 * Math.PI);
+                this.ctx.stroke();
+
+                // Expressive Antennae
+                this.ctx.strokeStyle = fish.color;
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(fish.size * 0.5, -fish.size * 0.4);
+                this.ctx.quadraticCurveTo(fish.size * 2.5, -fish.size * 1.5 + Math.sin(fish.swimCycle)*10, fish.size * 3.5, -fish.size * 0.5);
+                this.ctx.stroke();
+
+                // Huge Sparkly Eyes
                 this.ctx.fillStyle = 'white';
                 this.ctx.beginPath();
-                this.ctx.arc(fish.size * 0.4, -fish.size * 0.5, fish.size * 0.35, 0, Math.PI * 2);
+                this.ctx.arc(fish.size * 0.5, -fish.size * 0.4, fish.size * 0.4, 0, Math.PI * 2);
                 this.ctx.fill();
                 this.ctx.fillStyle = '#1e293b';
                 this.ctx.beginPath();
-                this.ctx.arc(fish.size * 0.5, -fish.size * 0.5, fish.size * 0.2, 0, Math.PI * 2);
+                this.ctx.arc(fish.size * 0.6, -fish.size * 0.4, fish.size * 0.25, 0, Math.PI * 2);
                 this.ctx.fill();
-                // Eye Highlight
                 this.ctx.fillStyle = 'white';
                 this.ctx.beginPath();
-                this.ctx.arc(fish.size * 0.55, -fish.size * 0.55, fish.size * 0.08, 0, Math.PI * 2);
+                this.ctx.arc(fish.size * 0.65, -fish.size * 0.5, fish.size * 0.12, 0, Math.PI * 2);
                 this.ctx.fill();
 
             } else if (fish.shape === 'snail') {
-                // Kawaii Snail
-                // Snail foot (Smiling shape)
+                // ULTRA KAWAII SNAIL (Mochi Style)
                 this.ctx.beginPath();
-                this.ctx.ellipse(0, 2, fish.size * 1.3, fish.size * 0.4, 0, 0, Math.PI * 2);
+                this.ctx.ellipse(0, 4, fish.size * 1.4, fish.size * 0.5, 0, 0, Math.PI * 2);
                 this.ctx.fill();
                 
-                // Snail shell (Rounder Spiral)
+                // Big Round Shell
                 this.ctx.beginPath(); 
-                this.ctx.arc(0, -fish.size*0.4, fish.size * 1.1, 0, Math.PI * 2); 
+                this.ctx.arc(-2, -fish.size * 0.3, fish.size * 1.2, 0, Math.PI * 2); 
+                this.ctx.fill();
+                
+                // Shell Pattern
+                this.ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                this.ctx.lineWidth = 4;
+                this.ctx.beginPath();
+                this.ctx.arc(-2, -fish.size * 0.3, fish.size * 0.7, 0, Math.PI * 1.8);
+                this.ctx.stroke();
+
+                // Tiny Flower on Shell
+                this.ctx.fillStyle = '#f472b6';
+                this.ctx.beginPath();
+                this.ctx.arc(-fish.size * 0.5, -fish.size * 1.2, fish.size * 0.2, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.fillStyle = '#fbbf24';
+                this.ctx.beginPath();
+                this.ctx.arc(-fish.size * 0.5, -fish.size * 1.2, fish.size * 0.08, 0, Math.PI * 2);
                 this.ctx.fill();
 
-                // Species Specific Shell Patterns
-                if (fish.id === 'nerite_snail') { // Bee: Yellow/Black stripes
-                    this.ctx.strokeStyle = '#1e293b';
-                    this.ctx.lineWidth = 4;
-                    for(let i=0; i<3; i++) {
-                        this.ctx.beginPath();
-                        this.ctx.arc(0, -fish.size*0.4, fish.size * 0.9, Math.PI * 0.2 + i*0.5, Math.PI * 0.4 + i*0.5);
-                        this.ctx.stroke();
-                    }
-                    // Horns
+                // Face on the foot
+                this.ctx.fillStyle = `rgba(255, 182, 193, 0.5)`;
+                this.ctx.beginPath();
+                this.ctx.arc(fish.size * 0.8, 2, fish.size * 0.2, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                // Tiny Mouth
+                this.ctx.strokeStyle = '#1e293b';
+                this.ctx.lineWidth = 1;
+                this.ctx.beginPath();
+                this.ctx.arc(fish.size * 1.0, 3, fish.size * 0.1, 0, Math.PI);
+                this.ctx.stroke();
+
+                // Wobbly Eyes
+                const stalkSway = Math.sin(timestamp * 0.003) * 3;
+                this.ctx.strokeStyle = fish.color;
+                this.ctx.lineWidth = 3;
+                [0.6, 1.0].forEach((xPos, i) => {
+                    const sway = i === 0 ? stalkSway : -stalkSway;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(fish.size * xPos, 0);
+                    this.ctx.lineTo(fish.size * (xPos + 0.2) + sway, -fish.size * 1.2);
+                    this.ctx.stroke();
+                    this.ctx.fillStyle = 'white';
+                    this.ctx.beginPath();
+                    this.ctx.arc(fish.size * (xPos + 0.2) + sway, -fish.size * 1.2, fish.size * 0.3, 0, Math.PI * 2);
+                    this.ctx.fill();
                     this.ctx.fillStyle = '#1e293b';
                     this.ctx.beginPath();
-                    this.ctx.moveTo(-fish.size*0.5, -fish.size*1.2);
-                    this.ctx.lineTo(-fish.size*0.3, -fish.size*1.4);
-                    this.ctx.lineTo(-fish.size*0.1, -fish.size*1.2);
+                    this.ctx.arc(fish.size * (xPos + 0.25) + sway, -fish.size * 1.2, fish.size * 0.15, 0, Math.PI * 2);
                     this.ctx.fill();
-                } else if (fish.id === 'ramshorn') { // Zebra: Leopard spots
-                    this.ctx.fillStyle = 'rgba(0,0,0,0.2)';
-                    for(let i=0; i<8; i++) {
-                        this.ctx.beginPath();
-                        this.ctx.arc(Math.cos(i)*fish.size*0.6, -fish.size*0.4 + Math.sin(i)*fish.size*0.6, 3, 0, Math.PI*2);
-                        this.ctx.fill();
-                    }
-                }
-
-                this.ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-                this.ctx.lineWidth = 3;
-                this.ctx.beginPath();
-                this.ctx.arc(0, -fish.size*0.4, fish.size * 0.7, 0, Math.PI * 1.5);
-                this.ctx.stroke();
-                
-                // Rosy Cheeks on foot
-                this.ctx.fillStyle = 'rgba(255, 182, 193, 0.6)';
-                this.ctx.beginPath();
-                this.ctx.arc(fish.size * 0.7, 0, fish.size * 0.2, 0, Math.PI * 2);
-                this.ctx.fill();
-
-                // Eyes on long stalks (Kawaii)
-                this.ctx.strokeStyle = fish.color;
-                this.ctx.lineWidth = 2;
-                const stalkSway = Math.sin(timestamp * 0.002) * 2;
-                
-                // Stalk 1
-                this.ctx.beginPath();
-                this.ctx.moveTo(fish.size * 0.8, -2);
-                this.ctx.lineTo(fish.size * 1.1 + stalkSway, -fish.size * 0.8);
-                this.ctx.stroke();
-                this.ctx.fillStyle = 'white';
-                this.ctx.beginPath();
-                this.ctx.arc(fish.size * 1.1 + stalkSway, -fish.size * 0.8, fish.size * 0.25, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.fillStyle = '#1e293b';
-                this.ctx.beginPath();
-                this.ctx.arc(fish.size * 1.15 + stalkSway, -fish.size * 0.8, fish.size * 0.12, 0, Math.PI * 2);
-                this.ctx.fill();
-
-                // Stalk 2
-                this.ctx.beginPath();
-                this.ctx.moveTo(fish.size * 0.5, -4);
-                this.ctx.lineTo(fish.size * 0.7 - stalkSway, -fish.size * 1.0);
-                this.ctx.stroke();
-                this.ctx.fillStyle = 'white';
-                this.ctx.beginPath();
-                this.ctx.arc(fish.size * 0.7 - stalkSway, -fish.size * 1.0, fish.size * 0.25, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.fillStyle = '#1e293b';
-                this.ctx.beginPath();
-                this.ctx.arc(fish.size * 0.75 - stalkSway, -fish.size * 1.0, fish.size * 0.12, 0, Math.PI * 2);
-                this.ctx.fill();
+                });
 
             } else {
-                // KAWAII FISH REDESIGN
-                let tailSway = !fish.isDead ? Math.sin(fish.swimCycle) * (fish.size * 0.5) : 0;
-                let bodyW = fish.size * 1.2;
-                let bodyH = fish.size * 1.0; // Rounder by default
-                let tailSize = fish.size * 1.1;
+                // ULTRA KAWAII FISH (Chibi Proportions)
+                let bodyW = fish.size * 1.3;
+                let bodyH = fish.size * 1.1;
+                let tailSway = Math.sin(fish.swimCycle) * (fish.size * 0.6);
 
-                if (fish.shape === 'slim') { bodyW *= 1.4; bodyH *= 0.7; tailSize *= 0.9; }
-                if (fish.shape === 'round') { bodyW *= 1.0; bodyH *= 1.3; tailSize *= 0.8; }
-                if (fish.shape === 'tall') { bodyW *= 0.8; bodyH *= 1.6; tailSize *= 1.3; }
-                if (fish.shape === 'flowing') { tailSize *= 2.2; bodyH *= 1.0; }
-                if (fish.shape === 'bottom') { bodyW *= 1.3; bodyH *= 0.6; tailSize *= 0.7; }
+                // Unique Silhouettes
+                if (fish.id === 'goldfish') { bodyW = fish.size * 1.5; bodyH = fish.size * 1.5; }
+                if (fish.id === 'tetra') { bodyW = fish.size * 1.6; bodyH = fish.size * 0.6; }
+                if (fish.id === 'angelfish') { bodyW = fish.size * 0.8; bodyH = fish.size * 1.8; }
+                if (fish.id === 'discus') { bodyW = fish.size * 1.6; bodyH = fish.size * 1.6; }
+                if (fish.id === 'betta') { bodyW = fish.size * 1.2; bodyH = fish.size * 1.0; }
 
-                // Draw Tail (Simpler, cuter hearts/rounded shapes)
+                // 1. Draw Tail
                 this.ctx.beginPath();
-                this.ctx.moveTo(-bodyW * 0.3, 0);
-                if (fish.shape === 'flowing') {
-                    this.ctx.bezierCurveTo(-bodyW * 1.8, -tailSize + tailSway, -bodyW * 2.8, tailSway, -bodyW * 1.8, tailSize + tailSway);
-                } else if (fish.id === 'swordtail') {
-                    // Swordtail extension
+                if (fish.id === 'betta') {
+                    // Huge Flowing Gown Tail
                     this.ctx.moveTo(-bodyW * 0.3, 0);
-                    this.ctx.lineTo(-bodyW * 2.5, tailSize * 0.8 + tailSway);
-                    this.ctx.lineTo(-bodyW * 0.8, tailSize * 0.2);
-                    this.ctx.closePath();
+                    this.ctx.bezierCurveTo(-bodyW * 3, -fish.size * 2.5 + tailSway, -bodyW * 4, tailSway, -bodyW * 3, fish.size * 2.5 + tailSway);
+                } else if (fish.id === 'angelfish') {
+                    // Long Streamers
+                    this.ctx.moveTo(-bodyW * 0.5, 0);
+                    this.ctx.lineTo(-bodyW * 2.5, -fish.size + tailSway);
+                    this.ctx.lineTo(-bodyW * 0.8, 0);
+                    this.ctx.lineTo(-bodyW * 2.5, fish.size + tailSway);
                 } else {
-                    // Heart-shaped tail
-                    this.ctx.bezierCurveTo(-bodyW * 0.8 - tailSize, -tailSize + tailSway, -bodyW * 1.2 - tailSize, 0, -bodyW * 0.8 - tailSize, tailSize + tailSway);
-                    this.ctx.lineTo(-bodyW * 0.3, 0);
+                    // Round Heart Tail
+                    this.ctx.moveTo(-bodyW * 0.3, 0);
+                    this.ctx.bezierCurveTo(-bodyW * 1.5, -bodyH + tailSway, -bodyW * 2, 0, -bodyW * 1.5, bodyH + tailSway);
                 }
                 this.ctx.fill();
 
-                // Draw Body (Chibi style)
+                // 2. Draw Body
                 this.ctx.beginPath();
-                this.ctx.ellipse(0, 0, Math.max(0.1, bodyW), Math.max(0.1, bodyH), 0, 0, Math.PI * 2);
+                if (fish.id === 'angelfish') {
+                    // Triangle Body
+                    this.ctx.moveTo(bodyW * 0.8, 0);
+                    this.ctx.lineTo(-bodyW * 0.5, -bodyH);
+                    this.ctx.lineTo(-bodyW * 0.5, bodyH);
+                } else {
+                    this.ctx.ellipse(0, 0, bodyW, bodyH, 0, 0, Math.PI * 2);
+                }
                 this.ctx.fill();
 
-                // Species Specific Body Patterns
-                if (fish.id === 'tetra') { // Neon Tetra: Glowing stripe
-                    this.ctx.shadowBlur = 10; this.ctx.shadowColor = '#38bdf8';
+                // 3. Species Patterns (Enhanced)
+                if (fish.id === 'tetra') {
+                    this.ctx.shadowBlur = 15; this.ctx.shadowColor = '#0ea5e9';
                     this.ctx.fillStyle = '#38bdf8';
-                    this.ctx.fillRect(-bodyW * 0.4, -bodyH * 0.2, bodyW * 0.8, bodyH * 0.15);
+                    this.ctx.fillRect(-bodyW * 0.5, -2, bodyW * 1.2, 4);
                     this.ctx.shadowBlur = 0;
-                } else if (fish.id === 'zebra') { // Zebra: Horizontal stripes
-                    this.ctx.fillStyle = 'rgba(255,255,255,0.4)';
-                    for(let i=0; i<3; i++) this.ctx.fillRect(-bodyW * 0.5, -bodyH * 0.4 + i*bodyH * 0.3, bodyW, 2);
-                } else if (fish.id === 'discus') { // Discus: Vertical bars
-                    this.ctx.fillStyle = 'rgba(0,0,0,0.15)';
-                    for(let i=0; i<5; i++) this.ctx.fillRect(-bodyW * 0.6 + i*bodyW * 0.3, -bodyH, 4, bodyH * 2);
-                } else if (fish.id === 'cory') { // Panda Cory: Black spots
+                    // Neon Heart
+                    if (Math.sin(timestamp * 0.01) > 0.8) {
+                        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                        this.ctx.font = '12px Arial';
+                        this.ctx.fillText('❤️', bodyW * 0.2, -bodyH * 0.5);
+                    }
+                } else if (fish.id === 'cory') {
                     this.ctx.fillStyle = '#1e293b';
-                    this.ctx.beginPath(); this.ctx.arc(bodyW * 0.4, -bodyH * 0.2, bodyW * 0.3, 0, Math.PI * 2); this.ctx.fill(); // Eye spot
-                    this.ctx.beginPath(); this.ctx.arc(-bodyW * 0.4, 0, bodyW * 0.25, 0, Math.PI * 2); this.ctx.fill(); // Tail spot
-                    // Barbels (Whiskers)
-                    this.ctx.strokeStyle = fish.color; this.ctx.lineWidth = 2;
-                    this.ctx.beginPath(); this.ctx.moveTo(bodyW * 0.8, bodyH * 0.2); this.ctx.lineTo(bodyW * 1.1, bodyH * 0.4); this.ctx.stroke();
-                } else if (fish.id === 'piranha') { // Piranha: Teeth + Red belly
+                    this.ctx.beginPath(); this.ctx.arc(bodyW * 0.4, -bodyH * 0.2, bodyW * 0.4, 0, Math.PI*2); this.ctx.fill();
+                    // Tiny Panda Ears (Fins)
+                    this.ctx.beginPath(); this.ctx.arc(-bodyW * 0.2, -bodyH * 0.8, bodyW * 0.3, 0, Math.PI*2); this.ctx.fill();
+                } else if (fish.id === 'piranha') {
                     this.ctx.fillStyle = '#ef4444';
-                    this.ctx.beginPath(); this.ctx.ellipse(0, bodyH * 0.4, bodyW * 0.6, bodyH * 0.4, 0, 0, Math.PI * 2); this.ctx.fill();
-                    this.ctx.fillStyle = 'white';
-                    for(let i=0; i<3; i++) this.ctx.fillRect(bodyW * 0.6 + i*2, bodyH * 0.2, 2, 4); // Tiny teeth
+                    this.ctx.beginPath(); this.ctx.arc(0, bodyH * 0.4, bodyW * 0.7, 0, Math.PI, false); this.ctx.fill();
+                    // Angry but cute eyebrow
+                    this.ctx.strokeStyle = '#1e293b'; this.ctx.lineWidth = 2;
+                    this.ctx.beginPath(); this.ctx.moveTo(bodyW * 0.3, -bodyH * 0.6); this.ctx.lineTo(bodyW * 0.7, -bodyH * 0.4); this.ctx.stroke();
+                    // Angry Vein
+                    this.ctx.fillStyle = '#ef4444';
+                    this.ctx.font = 'bold 14px Arial';
+                    this.ctx.fillText('💢', -bodyW * 0.5, -bodyH * 0.8);
+                } else if (fish.id === 'discus') {
+                    // Royal Crown for Discus
+                    this.ctx.fillStyle = '#fbbf24';
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(-bodyW * 0.2, -bodyH);
+                    this.ctx.lineTo(-bodyW * 0.3, -bodyH - 15);
+                    this.ctx.lineTo(-bodyW * 0.1, -bodyH - 8);
+                    this.ctx.lineTo(0, -bodyH - 18);
+                    this.ctx.lineTo(bodyW * 0.1, -bodyH - 8);
+                    this.ctx.lineTo(bodyW * 0.3, -bodyH - 15);
+                    this.ctx.lineTo(bodyW * 0.2, -bodyH);
+                    this.ctx.fill();
+                } else if (fish.id === 'guppy') {
+                    // Pink Bow for Guppy
+                    this.ctx.fillStyle = '#f472b6';
+                    this.ctx.beginPath();
+                    this.ctx.arc(-bodyW * 0.2, -bodyH * 0.8, 5, 0, Math.PI*2);
+                    this.ctx.fill();
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(-bodyW * 0.2, -bodyH * 0.8);
+                    this.ctx.lineTo(-bodyW * 0.4, -bodyH * 1.0);
+                    this.ctx.lineTo(-bodyW * 0.4, -bodyH * 0.6);
+                    this.ctx.fill();
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(-bodyW * 0.2, -bodyH * 0.8);
+                    this.ctx.lineTo(0, -bodyH * 1.0);
+                    this.ctx.lineTo(0, -bodyH * 0.6);
+                    this.ctx.fill();
                 }
 
-                // Rosy Cheeks
-                this.ctx.fillStyle = 'rgba(255, 182, 193, 0.5)';
+                // 4. Face (Ultra Kawaii)
+                // Pulsing Blush
+                this.ctx.fillStyle = `rgba(255, 182, 193, ${0.4 + Math.sin(timestamp * 0.01) * 0.2})`;
                 this.ctx.beginPath();
-                this.ctx.arc(bodyW * 0.3, bodyH * 0.1, bodyW * 0.2, 0, Math.PI * 2);
+                this.ctx.arc(bodyW * 0.4, bodyH * 0.2, bodyW * 0.25, 0, Math.PI * 2);
                 this.ctx.fill();
 
-                // Fins
-                this.ctx.fillStyle = fish.color;
+                // Tiny Smile (ω shape)
+                this.ctx.strokeStyle = '#1e293b';
+                this.ctx.lineWidth = 2;
                 this.ctx.beginPath();
-                if (fish.shape === 'tall' || fish.shape === 'flowing') {
-                    this.ctx.moveTo(0, -bodyH);
-                    this.ctx.quadraticCurveTo(-bodyW * 0.6, -bodyH * 2.0 + tailSway * 0.3, -bodyW * 1.0, -bodyH * 0.6);
-                    this.ctx.moveTo(0, bodyH);
-                    this.ctx.quadraticCurveTo(-bodyW * 0.6, bodyH * 2.0 - tailSway * 0.3, -bodyW * 1.0, bodyH * 0.6);
-                } else {
-                    this.ctx.moveTo(0, -bodyH * 0.9);
-                    this.ctx.quadraticCurveTo(-bodyW * 0.4, -bodyH * 1.4, -bodyW * 0.6, -bodyH * 0.8);
-                }
-                this.ctx.fill();
+                this.ctx.arc(bodyW * 0.7, bodyH * 0.1, bodyW * 0.1, 0, Math.PI);
+                this.ctx.stroke();
 
-                // Big Kawaii Eyes
+                // Huge Sparkly Eyes
                 if (!fish.isDead) {
-                    const eyeSize = fish.size * 0.4;
+                    const eyeSize = fish.size * 0.5;
                     this.ctx.fillStyle = 'white';
                     this.ctx.beginPath();
-                    this.ctx.arc(bodyW * 0.5, -bodyH * 0.2, eyeSize, 0, Math.PI * 2);
+                    this.ctx.arc(bodyW * 0.6, -bodyH * 0.2, eyeSize, 0, Math.PI * 2);
                     this.ctx.fill();
-                    
                     this.ctx.fillStyle = '#1e293b';
                     this.ctx.beginPath();
-                    this.ctx.arc(bodyW * 0.6, -bodyH * 0.2, eyeSize * 0.6, 0, Math.PI * 2);
+                    this.ctx.arc(bodyW * 0.7, -bodyH * 0.2, eyeSize * 0.7, 0, Math.PI * 2);
                     this.ctx.fill();
-                    
-                    // Eye Highlight (Sparkle)
+                    // Double Sparkle
                     this.ctx.fillStyle = 'white';
                     this.ctx.beginPath();
-                    this.ctx.arc(bodyW * 0.65, -bodyH * 0.3, eyeSize * 0.25, 0, Math.PI * 2);
+                    this.ctx.arc(bodyW * 0.75, -bodyH * 0.3, eyeSize * 0.3, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.beginPath();
+                    this.ctx.arc(bodyW * 0.65, -bodyH * 0.1, eyeSize * 0.15, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                
+                // Happy Particles (Sparkles)
+                if (fish.hunger < 50 && Math.random() < 0.02 && timeScale > 0) {
+                    this.ctx.fillStyle = '#fde047';
+                    this.ctx.beginPath();
+                    this.ctx.arc(Math.random()*bodyW*2 - bodyW, -bodyH - Math.random()*20, 2, 0, Math.PI*2);
                     this.ctx.fill();
                 }
             }
