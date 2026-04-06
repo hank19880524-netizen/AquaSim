@@ -28,16 +28,16 @@ export const SNAIL_DB = [
 ];
 
 export const PLANT_DB = [
-    { id: 'anubias', name: '小榕', cost: 15, maxH: 80, leaves: 4, color: '#166534', shape: 'broad', nAbsorb: 0.5, desc: '極度耐陰，生長緩慢' },
-    { id: 'javafern', name: '鐵皇冠', cost: 20, maxH: 120, leaves: 6, color: '#15803d', shape: 'long', nAbsorb: 0.8, desc: '蕨類，生長強健' },
-    { id: 'sword', name: '皇冠草', cost: 35, maxH: 250, leaves: 8, color: '#22c55e', shape: 'broad', nAbsorb: 1.5, desc: '大型水草，根系發達' },
-    { id: 'vallisneria', name: '水蘭', cost: 15, maxH: 350, leaves: 3, color: '#4ade80', shape: 'grass', nAbsorb: 1.2, desc: '草皮狀，極速長高' },
-    { id: 'crypt', name: '椒草', cost: 25, maxH: 100, leaves: 5, color: '#854d0e', shape: 'broad', nAbsorb: 0.7, desc: '偏暗褐色，適應力強' },
-    { id: 'hornwort', name: '金魚藻', cost: 10, maxH: 300, leaves: 12, color: '#4ade80', shape: 'bushy', nAbsorb: 3.0, desc: '吸硝酸鹽神器，爆殖' },
-    { id: 'rotala', name: '綠菊', cost: 20, maxH: 200, leaves: 10, color: '#86efac', shape: 'bushy', nAbsorb: 1.8, desc: '美麗的後景莖面草' },
-    { id: 'ludwigia', name: '小紅莓', cost: 40, maxH: 180, leaves: 8, color: '#f43f5e', shape: 'bushy', nAbsorb: 1.2, desc: '水草紅色的視覺亮點' },
-    { id: 'moss', name: '莫絲', cost: 15, maxH: 30, leaves: 15, color: '#14532d', shape: 'carpet', nAbsorb: 0.5, desc: '前景草皮，蝦子最愛' },
-    { id: 'sprite', name: '水妖精草', cost: 25, maxH: 220, leaves: 9, color: '#22c55e', shape: 'bushy', nAbsorb: 2.0, desc: '生長迅速的羽狀葉' }
+    { id: 'anubias', name: '小榕', cost: 15, maxH: 150, leaves: 4, color: '#166534', shape: 'broad', nAbsorb: 0.5, desc: '極度耐陰，生長緩慢' },
+    { id: 'javafern', name: '鐵皇冠', cost: 20, maxH: 220, leaves: 6, color: '#15803d', shape: 'long', nAbsorb: 0.8, desc: '蕨類，生長強健' },
+    { id: 'sword', name: '皇冠草', cost: 35, maxH: 450, leaves: 8, color: '#22c55e', shape: 'broad', nAbsorb: 1.5, desc: '大型水草，根系發達' },
+    { id: 'vallisneria', name: '水蘭', cost: 15, maxH: 600, leaves: 3, color: '#4ade80', shape: 'grass', nAbsorb: 1.2, desc: '草皮狀，極速長高' },
+    { id: 'crypt', name: '椒草', cost: 25, maxH: 180, leaves: 5, color: '#854d0e', shape: 'broad', nAbsorb: 0.7, desc: '偏暗褐色，適應力強' },
+    { id: 'hornwort', name: '金魚藻', cost: 10, maxH: 550, leaves: 12, color: '#4ade80', shape: 'bushy', nAbsorb: 3.0, desc: '吸硝酸鹽神器，爆殖' },
+    { id: 'rotala', name: '綠菊', cost: 20, maxH: 380, leaves: 10, color: '#86efac', shape: 'bushy', nAbsorb: 1.8, desc: '美麗的後景莖面草' },
+    { id: 'ludwigia', name: '小紅莓', cost: 40, maxH: 320, leaves: 8, color: '#f43f5e', shape: 'bushy', nAbsorb: 1.2, desc: '水草紅色的視覺亮點' },
+    { id: 'moss', name: '莫絲', cost: 15, maxH: 60, leaves: 15, color: '#14532d', shape: 'carpet', nAbsorb: 0.5, desc: '前景草皮，蝦子最愛' },
+    { id: 'sprite', name: '水妖精草', cost: 25, maxH: 400, leaves: 9, color: '#22c55e', shape: 'bushy', nAbsorb: 2.0, desc: '生長迅速的羽狀葉' }
 ];
 
 export const DECOR_DB = [

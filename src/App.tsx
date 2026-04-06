@@ -16,10 +16,16 @@ const App: React.FC = () => {
     const [lightOn, setLightOn] = useState(true);
     const [waterStats, setWaterStats] = useState<any>(null);
     const [sysStats, setSysStats] = useState<any>(null);
+    const [alerts, setAlerts] = useState<string[]>([]);
+    const [statusLog, setStatusLog] = useState<{ text: string, time: string }[]>([]);
     const [counts, setCounts] = useState({ fish: 0, shrimp: 0, snail: 0, plants: 0, deadFish: 0, deadShrimp: 0, deadSnail: 0 });
     const [showPipeline, setShowPipeline] = useState(false);
     const [selectedNode, setSelectedNode] = useState<number | null>(null);
     const [shopTab, setShopTab] = useState<'life' | 'potion' | 'decor' | 'upgrade'>('life');
+    const [selectedFish, setSelectedFish] = useState(FISH_DB[0].id);
+    const [selectedShrimp, setSelectedShrimp] = useState(SHRIMP_DB[0].id);
+    const [selectedSnail, setSelectedSnail] = useState(SNAIL_DB[0].id);
+    const [selectedPlant, setSelectedPlant] = useState(PLANT_DB[0].id);
     
     useEffect(() => {
         const saved = localStorage.getItem('aquasim_pro_save');
@@ -39,6 +45,8 @@ const App: React.FC = () => {
         setLightOn(s.lightOn);
         setWaterStats({ ...s.water });
         setSysStats({ ...s.sysStats });
+        setAlerts(s.getAlerts());
+        setStatusLog([...s.statusLog]);
         
         const aliveFishes = s.fishes.filter(f => !f.isDead && f.shape !== 'shrimp' && f.shape !== 'snail').length;
         const aliveShrimps = s.fishes.filter(f => !f.isDead && f.shape === 'shrimp').length;
@@ -107,6 +115,75 @@ const App: React.FC = () => {
         };
         localStorage.setItem('aquasim_pro_save', JSON.stringify(data));
         sim.showActionText('💾 存檔成功');
+    };
+
+    const CreaturePreview: React.FC<{ item: any, type: 'fish' | 'shrimp' | 'snail' | 'plant' }> = ({ item, type }) => {
+        const canvasRef = useRef<HTMLCanvasElement>(null);
+        
+        useEffect(() => {
+            if (!canvasRef.current) return;
+            const ctx = canvasRef.current.getContext('2d');
+            if (!ctx) return;
+            
+            const w = canvasRef.current.width;
+            const h = canvasRef.current.height;
+            ctx.clearRect(0, 0, w, h);
+            ctx.save();
+            ctx.translate(w / 2, h / 2);
+            
+            const fish = { ...item, swimCycle: 0, isDead: false };
+            const timestamp = Date.now();
+            
+            ctx.fillStyle = item.color;
+            ctx.strokeStyle = item.color;
+            
+            const size = 20; // Preview size
+
+            if (type === 'fish') {
+                let bodyW = size * 1.3;
+                let bodyH = size * 1.1;
+                if (item.id === 'goldfish') { bodyW = size * 1.5; bodyH = size * 1.5; }
+                if (item.id === 'tetra') { bodyW = size * 1.6; bodyH = size * 0.6; }
+                if (item.id === 'angelfish') { bodyW = size * 0.8; bodyH = size * 1.8; }
+                
+                // Tail
+                ctx.beginPath();
+                ctx.moveTo(-bodyW * 0.3, 0);
+                ctx.bezierCurveTo(-bodyW * 1.5, -bodyH, -bodyW * 2, 0, -bodyW * 1.5, bodyH);
+                ctx.fill();
+                // Body
+                ctx.beginPath();
+                ctx.ellipse(0, 0, bodyW, bodyH, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Eye
+                ctx.fillStyle = 'white';
+                ctx.beginPath(); ctx.arc(bodyW * 0.6, -bodyH * 0.2, size * 0.4, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.beginPath(); ctx.arc(bodyW * 0.7, -bodyH * 0.2, size * 0.25, 0, Math.PI * 2); ctx.fill();
+            } else if (type === 'shrimp') {
+                ctx.beginPath(); ctx.arc(0, 0, size * 0.8, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(-size * 0.8, size * 0.2, size * 0.4, 0, Math.PI * 2); ctx.fill();
+                // Eye
+                ctx.fillStyle = 'white';
+                ctx.beginPath(); ctx.arc(size * 0.5, -size * 0.4, size * 0.4, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.beginPath(); ctx.arc(size * 0.6, -size * 0.4, size * 0.25, 0, Math.PI * 2); ctx.fill();
+            } else if (type === 'snail') {
+                ctx.beginPath(); ctx.ellipse(0, 4, size * 1.4, size * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(-2, -size * 0.3, size * 1.2, 0, Math.PI * 2); ctx.fill();
+            } else if (type === 'plant') {
+                ctx.fillStyle = item.color;
+                for(let i=0; i<3; i++) {
+                    ctx.beginPath();
+                    ctx.ellipse(i*5-5, 0, 4, 15, 0.2 * (i-1), 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+            
+            ctx.restore();
+        }, [item, type]);
+        
+        return <canvas ref={canvasRef} width={60} height={60} className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-900/50 rounded-lg border border-slate-700" />;
     };
 
     if (!gameStarted) {
@@ -206,6 +283,18 @@ const App: React.FC = () => {
                     <div id="tank-container" className="relative w-full aspect-video rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-slate-600 bg-black transition-all overflow-hidden">
                         <canvas ref={canvasRef} width={2000} height={1000} className="absolute top-0 left-0 w-full h-full z-10 block"></canvas>
                         <div className={`absolute inset-0 bg-slate-950 pointer-events-none transition-opacity duration-1000 z-20 ${lightOn ? 'opacity-0' : 'opacity-40'}`}></div>
+                        
+                        {/* Alerts Overlay */}
+                        {alerts.length > 0 && (
+                            <div className="absolute top-4 left-4 z-40 flex flex-col gap-2 max-w-[250px]">
+                                {alerts.map((alert, i) => (
+                                    <div key={i} className="bg-red-600/90 text-white px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-black shadow-lg border border-red-400/50 animate-in slide-in-from-left-4 duration-300 flex items-center gap-2">
+                                        {alert}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {isLeaking && (
                             <div className="absolute inset-0 bg-red-500/20 z-30 flex items-center justify-center pointer-events-none">
                                 <div className="bg-red-600/95 text-white px-4 sm:px-8 py-2 sm:py-4 rounded-xl font-bold text-lg sm:text-2xl md:text-3xl tracking-widest animate-pulse border-2 border-white shadow-[0_0_30px_rgba(239,68,68,0.8)] flex items-center gap-2 sm:gap-4 text-center">
@@ -254,68 +343,102 @@ const App: React.FC = () => {
                         <div className="min-h-[100px]">
                             {shopTab === 'life' && (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div className="bg-slate-800/50 p-1.5 sm:p-2 rounded-lg border border-slate-700 flex flex-col gap-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                            <select id="fish-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-cyan-500 transition font-medium h-6 sm:h-8">
+                                    <div className="bg-slate-800/50 p-2 rounded-lg border border-slate-700 flex flex-col gap-2">
+                                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">魚類與蝦類</div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="bg-slate-900/50 p-1 rounded-lg border border-slate-800 shrink-0">
+                                                <CreaturePreview item={FISH_DB.find(f => f.id === selectedFish) || FISH_DB[0]} type="fish" />
+                                            </div>
+                                            <select 
+                                                value={selectedFish} 
+                                                onChange={(e) => setSelectedFish(e.target.value)}
+                                                className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-2 py-1.5 flex-grow border border-slate-700 focus:outline-none focus:border-indigo-500 transition font-medium"
+                                            >
                                                 {FISH_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
                                             </select>
                                             <button onClick={() => {
-                                                const id = (document.getElementById('fish-selector') as HTMLSelectElement).value;
-                                                const f = FISH_DB.find(x => x.id === id);
+                                                const f = FISH_DB.find(x => x.id === selectedFish);
                                                 if (f && sim && sim.money >= f.cost) {
                                                     sim.money -= f.cost;
-                                                    sim.spawnFish(id);
+                                                    sim.spawnFish(f.id);
                                                     sim.showActionText(`🐟 購入 ${f.name}`);
                                                     updateUI(sim);
                                                 }
-                                            }} className="bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">買魚</button>
+                                            }} className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded text-[10px] font-bold shadow-lg transition">
+                                                購買
+                                            </button>
                                         </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <select id="shrimp-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-rose-500 transition font-medium h-6 sm:h-8">
+                                        <div className="flex items-center gap-2">
+                                            <div className="bg-slate-900/50 p-1 rounded-lg border border-slate-800 shrink-0">
+                                                <CreaturePreview item={SHRIMP_DB.find(f => f.id === selectedShrimp) || SHRIMP_DB[0]} type="shrimp" />
+                                            </div>
+                                            <select 
+                                                value={selectedShrimp} 
+                                                onChange={(e) => setSelectedShrimp(e.target.value)}
+                                                className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-2 py-1.5 flex-grow border border-slate-700 focus:outline-none focus:border-rose-500 transition font-medium"
+                                            >
                                                 {SHRIMP_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
                                             </select>
                                             <button onClick={() => {
-                                                const id = (document.getElementById('shrimp-selector') as HTMLSelectElement).value;
-                                                const f = SHRIMP_DB.find(x => x.id === id);
+                                                const f = SHRIMP_DB.find(x => x.id === selectedShrimp);
                                                 if (f && sim && sim.money >= f.cost) {
                                                     sim.money -= f.cost;
-                                                    sim.spawnFish(id);
+                                                    sim.spawnFish(f.id);
                                                     sim.showActionText(`🦐 購入 ${f.name}`);
                                                     updateUI(sim);
                                                 }
-                                            }} className="bg-rose-600 hover:bg-rose-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">買蝦</button>
+                                            }} className="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded text-[10px] font-bold shadow-lg transition">
+                                                購買
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="bg-slate-800/50 p-1.5 sm:p-2 rounded-lg border border-slate-700 flex flex-col gap-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                            <select id="snail-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-amber-500 transition font-medium h-6 sm:h-8">
+                                    <div className="bg-slate-800/50 p-2 rounded-lg border border-slate-700 flex flex-col gap-2">
+                                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">螺類與植物</div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="bg-slate-900/50 p-1 rounded-lg border border-slate-800 shrink-0">
+                                                <CreaturePreview item={SNAIL_DB.find(f => f.id === selectedSnail) || SNAIL_DB[0]} type="snail" />
+                                            </div>
+                                            <select 
+                                                value={selectedSnail} 
+                                                onChange={(e) => setSelectedSnail(e.target.value)}
+                                                className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-2 py-1.5 flex-grow border border-slate-700 focus:outline-none focus:border-amber-500 transition font-medium"
+                                            >
                                                 {SNAIL_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
                                             </select>
                                             <button onClick={() => {
-                                                const id = (document.getElementById('snail-selector') as HTMLSelectElement).value;
-                                                const f = SNAIL_DB.find(x => x.id === id);
+                                                const f = SNAIL_DB.find(x => x.id === selectedSnail);
                                                 if (f && sim && sim.money >= f.cost) {
                                                     sim.money -= f.cost;
-                                                    sim.spawnFish(id);
+                                                    sim.spawnFish(f.id);
                                                     sim.showActionText(`🐌 購入 ${f.name}`);
                                                     updateUI(sim);
                                                 }
-                                            }} className="bg-amber-600 hover:bg-amber-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">買螺</button>
+                                            }} className="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded text-[10px] font-bold shadow-lg transition">
+                                                購買
+                                            </button>
                                         </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <select id="plant-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-emerald-500 transition font-medium h-6 sm:h-8">
-                                                {PLANT_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
+                                        <div className="flex items-center gap-2">
+                                            <div className="bg-slate-900/50 p-1 rounded-lg border border-slate-800 shrink-0">
+                                                <CreaturePreview item={PLANT_DB.find(f => f.id === selectedPlant) || PLANT_DB[0]} type="plant" />
+                                            </div>
+                                            <select 
+                                                value={selectedPlant} 
+                                                onChange={(e) => setSelectedPlant(e.target.value)}
+                                                className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-2 py-1.5 flex-grow border border-slate-700 focus:outline-none focus:border-emerald-500 transition font-medium"
+                                            >
+                                                {PLANT_DB.map(p => <option key={p.id} value={p.id}>{p.name} (${p.cost})</option>)}
                                             </select>
                                             <button onClick={() => {
-                                                const id = (document.getElementById('plant-selector') as HTMLSelectElement).value;
-                                                const p = PLANT_DB.find(x => x.id === id);
+                                                const p = PLANT_DB.find(x => x.id === selectedPlant);
                                                 if (p && sim && sim.money >= p.cost) {
                                                     sim.money -= p.cost;
-                                                    sim.spawnPlant(id, Math.random() * 1800 + 100);
+                                                    sim.spawnPlant(p.id, Math.random() * 1800 + 100);
                                                     sim.showActionText(`🌿 栽種 ${p.name}`);
                                                     updateUI(sim);
                                                 }
-                                            }} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">栽種</button>
+                                            }} className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-[10px] font-bold shadow-lg transition">
+                                                購買
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -460,6 +583,25 @@ const App: React.FC = () => {
                                 <div className="text-xs font-bold text-slate-300">藻類: {waterStats?.algae.toFixed(0)}%</div>
                             </div>
                         </div>
+
+                        <div className="mt-3 bg-slate-900/80 p-2 rounded-lg border border-slate-800 max-h-[150px] overflow-y-auto no-scrollbar">
+                            <div className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                                <i className="fa-solid fa-list-ul text-cyan-500"></i> 生態事件紀錄
+                            </div>
+                            <div className="space-y-1">
+                                {statusLog.length === 0 ? (
+                                    <div className="text-[9px] text-slate-600 italic">尚無紀錄...</div>
+                                ) : (
+                                    statusLog.map((log, i) => (
+                                        <div key={i} className="flex items-start gap-2 text-[9px] border-b border-slate-800/50 pb-1 last:border-0">
+                                            <span className="text-slate-500 font-mono shrink-0">[{log.time}]</span>
+                                            <span className="text-slate-300">{log.text}</span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
                         <button 
                             onClick={() => setShowPipeline(true)}
                             className="w-full mt-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white py-1.5 rounded-lg border border-cyan-400/30 shadow-lg transition flex items-center justify-center gap-2 text-[10px] sm:text-xs font-black uppercase tracking-widest"

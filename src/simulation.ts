@@ -25,6 +25,8 @@ export class AquariumSimulation {
     actionText: string;
     actionTextTimer: number;
     isRunning: boolean;
+    alerts: string[] = [];
+    statusLog: { text: string, time: string }[] = [];
     catPawX: number = 0;
     catPawY: number = -300;
     catPawActive: boolean = false;
@@ -185,14 +187,23 @@ export class AquariumSimulation {
 
     generateId() { return Math.random().toString(36).substr(2, 9); }
 
-    showActionText(text: string) { this.actionText = text; this.actionTextTimer = 90; }
+    showActionText(text: string) { 
+        this.actionText = text; 
+        this.actionTextTimer = 90; 
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        this.statusLog.unshift({ text, time: timeStr });
+        if (this.statusLog.length > 20) this.statusLog.pop();
+    }
 
     feed() { 
         const upgrade = FEEDER_UPGRADES.find(u => u.level === this.feederLevel) || FEEDER_UPGRADES[0];
         if (this.money < 2) return;
         this.money -= 2;
-        this.water.food += upgrade.amount; 
-        for(let i=0;i<10;i++) this.foodParticles.push({ x: Math.random()*(this.canvas.width-100)+50, y: -10 - Math.random()*30, vy: 0.8 + Math.random()*1.0 });
+        for(let i=0; i<upgrade.amount; i++) {
+            this.water.food += 1;
+            this.foodParticles.push({ x: Math.random()*(this.canvas.width-100)+50, y: -10 - Math.random()*30, vy: 0.8 + Math.random()*1.0 });
+        }
         this.showActionText('🍕 投放飼料'); this.onUpdateUI(this); 
     }
     
@@ -253,7 +264,7 @@ export class AquariumSimulation {
 
     spawnPlant(id: string, x: number) {
         const p = PLANT_DB.find(px => px.id === id);
-        if(p) this.plants.push({ ...p, x: x, height: 30+Math.random()*30 });
+        if(p) this.plants.push({ ...p, x: x, height: 60+Math.random()*60 });
     }
 
     spawnDecoration(id: string) {
@@ -402,6 +413,26 @@ export class AquariumSimulation {
         this.onUpdateUI(this);
     }
 
+    getAlerts() {
+        const alerts: string[] = [];
+        if (this.water.nh3 > 0.1) alerts.push('⚠️ 氨濃度過高！');
+        if (this.water.no2 > 0.1) alerts.push('⚠️ 亞硝酸鹽濃度過高！');
+        if (this.water.o2 < 4) alerts.push('💨 溶氧量不足！');
+        if (this.water.level < 80) alerts.push('💧 水位過低，請加水！');
+        if (this.sysStats.isLeaking) alerts.push('🚨 系統漏水中！');
+        
+        const hungryCount = this.fishes.filter(f => !f.isDead && f.hunger > 70).length;
+        if (hungryCount > 0) alerts.push(`🍽️ 有 ${hungryCount} 隻生物感到飢餓`);
+        
+        const sickCount = this.fishes.filter(f => !f.isDead && f.health < 50).length;
+        if (sickCount > 0) alerts.push(`💊 有 ${sickCount} 隻生物健康狀況不佳`);
+
+        const deadCount = this.fishes.filter(f => f.isDead).length;
+        if (deadCount > 0) alerts.push(`💀 缸內有 ${deadCount} 具遺體需撈除`);
+
+        return alerts;
+    }
+
     ecoTick() {
         if(!this.isRunning) return;
         if(this.speed > 0) {
@@ -419,9 +450,11 @@ export class AquariumSimulation {
         // Automatic feeding
         if (this.feederLevel >= 2) {
             const upgrade = FEEDER_UPGRADES.find(u => u.level === this.feederLevel)!;
-            this.water.food += upgrade.amount;
             if (Math.random() < 0.2) {
-                for(let i=0;i<3;i++) this.foodParticles.push({ x: Math.random()*(this.canvas.width-100)+50, y: -10 - Math.random()*30, vy: 0.8 + Math.random()*1.0 });
+                for(let i=0; i<upgrade.amount; i++) {
+                    this.water.food += 1;
+                    this.foodParticles.push({ x: Math.random()*(this.canvas.width-100)+50, y: -10 - Math.random()*30, vy: 0.8 + Math.random()*1.0 });
+                }
             }
         }
 
@@ -471,7 +504,7 @@ export class AquariumSimulation {
             this.water.nh3 += 0.005 * fish.bioLoad * dilution; 
             this.water.tds += 0.02 * fish.bioLoad * dilution; 
             fish.hunger += 2;
-            if(this.water.food > 0 && fish.hunger > 60) { this.water.food -= 1; fish.hunger = 0; fish.health = Math.min(100, fish.health + 5); }
+            // if(this.water.food > 0 && fish.hunger > 60) { this.water.food -= 1; fish.hunger = 0; fish.health = Math.min(100, fish.health + 5); }
 
             // Growth
             if(fish.hunger < 50 && fish.size < fish.maxSize) {
@@ -545,7 +578,7 @@ export class AquariumSimulation {
                     let gm = this.envyBuff > 0 ? 3 : 1;
                     this.water.no3 -= (0.05 * plant.nAbsorb) * gm * dilution; 
                     this.water.o2 += 0.2 * gm * dilution;
-                    if(plant.height < plant.maxH) plant.height += 0.5 * gm;
+                    if(plant.height < plant.maxH) plant.height += 1.0 * gm;
                 }
             } else {
                 this.water.o2 -= 0.05 * dilution;
@@ -728,16 +761,16 @@ export class AquariumSimulation {
             } else if (plant.shape === 'carpet') {
                 for(let i=0; i<plant.leaves * 1.5; i++) {
                     let lx = plant.x + (Math.random()-0.5)*40; let ly = this.canvas.height - 20 - Math.random()*(actualHeight+10);
-                    this.ctx.beginPath(); this.ctx.moveTo(lx, ly); this.ctx.lineTo(lx + (Math.random()-0.5)*15, ly - Math.random()*10); this.ctx.lineWidth = 2; this.ctx.stroke();
+                    this.ctx.beginPath(); this.ctx.moveTo(lx, ly); this.ctx.lineTo(lx + (Math.random()-0.5)*15, ly - Math.random()*10); this.ctx.lineWidth = 4; this.ctx.stroke();
                 }
             } else {
-                this.ctx.lineWidth = 3; this.ctx.beginPath(); this.ctx.moveTo(plant.x, this.canvas.height - 20);
+                this.ctx.lineWidth = 5; this.ctx.beginPath(); this.ctx.moveTo(plant.x, this.canvas.height - 20);
                 this.ctx.bezierCurveTo(plant.x + swayMid, this.canvas.height - actualHeight*0.3, plant.x + swayTop*0.5, this.canvas.height - actualHeight*0.6, plant.x + swayTop, this.canvas.height - actualHeight);
                 this.ctx.stroke();
                 for(let i=1; i<=plant.leaves; i++) {
                     let t = i / plant.leaves; let leafY = this.canvas.height - 20 - (actualHeight * t); let currentSway = swayTop * t;
                     let leafWobble = (timeScale > 0) ? Math.sin(timestamp * 0.002 + plant.x + i) * 0.2 : 0;
-                    let leafSize = plant.shape === 'broad' ? 14 : 6; let dir = i % 2 === 0 ? 1 : -1;
+                    let leafSize = plant.shape === 'broad' ? 24 : 12; let dir = i % 2 === 0 ? 1 : -1;
                     this.ctx.save(); this.ctx.translate(plant.x + currentSway, leafY); this.ctx.rotate(dir * (Math.PI/4 + leafWobble));
                     this.ctx.beginPath(); this.ctx.moveTo(0, 0); this.ctx.quadraticCurveTo(leafSize*0.5, -leafSize*0.3, leafSize, 0); this.ctx.quadraticCurveTo(leafSize*0.5, leafSize*0.3, 0, 0); this.ctx.fill();
                     this.ctx.restore();
@@ -751,11 +784,35 @@ export class AquariumSimulation {
             if(b.y < waterY) this.bubbles.splice(i, 1);
         }
 
-        this.ctx.fillStyle = '#b45309';
+        this.ctx.fillStyle = '#f472b6'; // Pink heart food
         for(let i = this.foodParticles.length - 1; i >= 0; i--) {
             let f = this.foodParticles[i];
             if(f.y < waterY) f.y += f.vy * 2 * timeScale; else if(f.y < this.canvas.height - 25) f.y += f.vy * timeScale; else f.y = this.canvas.height - 25; 
-            this.ctx.beginPath(); this.ctx.arc(f.x, f.y, 3, 0, Math.PI * 2); this.ctx.fill();
+            
+            // Eating logic
+            let eaten = false;
+            for(let fish of this.fishes) {
+                if(!fish.isDead && Math.hypot(fish.x - f.x, fish.y - f.y) < 25) {
+                    this.foodParticles.splice(i, 1);
+                    fish.hunger = Math.max(0, fish.hunger - 40);
+                    fish.health = Math.min(100, fish.health + 10);
+                    this.water.food = Math.max(0, this.water.food - 1); // Reduce global food count
+                    eaten = true;
+                    break;
+                }
+            }
+            if(eaten) continue;
+
+            // Draw Heart Shaped Food
+            this.ctx.save();
+            this.ctx.translate(f.x, f.y);
+            this.ctx.beginPath();
+            const size = 6;
+            this.ctx.moveTo(0, 0);
+            this.ctx.bezierCurveTo(-size, -size, -size*2, size/2, 0, size*1.5);
+            this.ctx.bezierCurveTo(size*2, size/2, size, -size, 0, 0);
+            this.ctx.fill();
+            this.ctx.restore();
         }
 
         // 3. Draw Cat Paw
@@ -805,6 +862,24 @@ export class AquariumSimulation {
         for(let fish of this.fishes) {
             let topBound = waterY + 15; let bottomBound = this.canvas.height - 30;
             if(!fish.isDead) {
+                // Food chasing logic
+                if(fish.hunger > 40 && this.foodParticles.length > 0) {
+                    let nearestFood = null;
+                    let minDist = Infinity;
+                    for(let f of this.foodParticles) {
+                        let d = Math.hypot(fish.x - f.x, fish.y - f.y);
+                        if(d < minDist) { minDist = d; nearestFood = f; }
+                    }
+                    if(nearestFood && minDist < 400) {
+                        let dx = nearestFood.x - fish.x;
+                        let dy = nearestFood.y - fish.y;
+                        let angle = Math.atan2(dy, dx);
+                        let speedMulti = fish.shape === 'round' ? 1.0 : (fish.shape === 'shrimp' ? 0.5 : (fish.shape === 'snail' ? 0.2 : 2.5));
+                        fish.targetVx = Math.cos(angle) * 3.5 * speedMulti;
+                        fish.targetVy = Math.sin(angle) * 2.0 * speedMulti;
+                    }
+                }
+
                 fish.vx += (fish.targetVx - fish.vx) * 0.05 * timeScale; fish.vy += (fish.targetVy - fish.vy) * 0.05 * timeScale;
                 fish.x += fish.vx * timeScale; fish.y += fish.vy * timeScale; fish.swimCycle += 0.15 * Math.max(0.5, Math.abs(fish.vx)) * timeScale;
                 if(fish.x < 30) { fish.targetVx = Math.abs(fish.targetVx); fish.vx += 0.2; }
