@@ -1,5 +1,5 @@
-import { FISH_DB, SHRIMP_DB, SNAIL_DB, PLANT_DB, EQUIP_DB, MEDIA_DB } from './constants';
-import { Fish, Plant, PipelineNode, WaterStats, SystemStats, SaveData } from './types';
+import { FISH_DB, SHRIMP_DB, SNAIL_DB, PLANT_DB, EQUIP_DB, MEDIA_DB, DECOR_DB, FEEDER_UPGRADES } from './constants';
+import { Fish, Plant, PipelineNode, WaterStats, SystemStats, SaveData, Decoration } from './types';
 
 export class AquariumSimulation {
     canvas: HTMLCanvasElement;
@@ -12,6 +12,8 @@ export class AquariumSimulation {
     plants: Plant[];
     pipeline: (PipelineNode | null)[];
     sysStats: SystemStats;
+    feederLevel: number;
+    decorations: Decoration[];
     lightOn: boolean;
     envyBuff: number;
     bubbles: any[];
@@ -50,6 +52,8 @@ export class AquariumSimulation {
             this.plants = loadData.plants;
             this.pipeline = loadData.pipeline;
             this.sysStats = loadData.sysStats;
+            this.feederLevel = loadData.feederLevel || 0;
+            this.decorations = loadData.decorations || [];
             this.lightOn = true;
             this.envyBuff = 0;
             this.bubbles = [];
@@ -60,6 +64,8 @@ export class AquariumSimulation {
             this.money = initialMoney;
             this.gameTimeHours = 8;
             this.water = { level: 100, ph: 7.0, tds: 150.0, nh3: 0.0, no2: 0.0, no3: 5.0, o2: 8.0, co2: 3.0, food: 0, algae: 0, bacteria: 10, kh: 4.0, gh: 5.0 };
+            this.feederLevel = 0;
+            this.decorations = [];
             this.lightOn = true;
             this.envyBuff = 0;
             this.pipeline = [
@@ -99,9 +105,10 @@ export class AquariumSimulation {
     showActionText(text: string) { this.actionText = text; this.actionTextTimer = 90; }
 
     feed() { 
+        const upgrade = FEEDER_UPGRADES.find(u => u.level === this.feederLevel) || FEEDER_UPGRADES[0];
         if (this.money < 2) return;
         this.money -= 2;
-        this.water.food += 10; 
+        this.water.food += upgrade.amount; 
         for(let i=0;i<10;i++) this.foodParticles.push({ x: Math.random()*(this.canvas.width-100)+50, y: -10 - Math.random()*30, vy: 0.8 + Math.random()*1.0 });
         this.showActionText('🍕 投放飼料'); this.onUpdateUI(this); 
     }
@@ -157,6 +164,32 @@ export class AquariumSimulation {
     spawnPlant(id: string, x: number) {
         const p = PLANT_DB.find(px => px.id === id);
         if(p) this.plants.push({ ...p, x: x, height: 30+Math.random()*30 });
+    }
+
+    spawnDecoration(id: string) {
+        const d = DECOR_DB.find(x => x.id === id);
+        if(!d) return;
+        if(this.money < d.cost) return;
+        this.money -= d.cost;
+        this.decorations.push({
+            ...d,
+            x: Math.random() * (this.canvas.width - 200) + 100,
+            y: this.canvas.height - 30,
+            scale: 0.8 + Math.random() * 0.4,
+            flip: Math.random() > 0.5
+        } as any);
+        this.onUpdateUI(this);
+    }
+
+    upgradeFeeder() {
+        const nextLevel = this.feederLevel + 1;
+        const upgrade = FEEDER_UPGRADES.find(u => u.level === nextLevel);
+        if(!upgrade) return;
+        if(this.money < upgrade.cost) return;
+        this.money -= upgrade.cost;
+        this.feederLevel = nextLevel;
+        this.showActionText(`🚀 飼料系統升級: ${upgrade.name}`);
+        this.onUpdateUI(this);
     }
 
     setSpeed(m: number) { 
@@ -281,6 +314,15 @@ export class AquariumSimulation {
         const dilution = 100 / this.volumeLiters; 
         const oldNh3 = this.water.nh3; 
 
+        // Automatic feeding
+        if (this.feederLevel >= 2) {
+            const upgrade = FEEDER_UPGRADES.find(u => u.level === this.feederLevel)!;
+            this.water.food += upgrade.amount;
+            if (Math.random() < 0.2) {
+                for(let i=0;i<3;i++) this.foodParticles.push({ x: Math.random()*(this.canvas.width-100)+50, y: -10 - Math.random()*30, vy: 0.8 + Math.random()*1.0 });
+            }
+        }
+
         if(this.gameTimeHours % 24 === 0) {
             let aliveFishes = this.fishes.filter(f=>!f.isDead);
             let uniqueSpecies = new Set(aliveFishes.map(f=>f.id)).size;
@@ -399,6 +441,14 @@ export class AquariumSimulation {
         if(isNaN(timeScale) || timeScale < 0) timeScale = 1;
 
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // 1. Realistic Background Gradient
+        const bgGrad = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+        bgGrad.addColorStop(0, '#0c4a6e'); // Deep blue top
+        bgGrad.addColorStop(1, '#082f49'); // Darker blue bottom
+        this.ctx.fillStyle = bgGrad;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
         let algaeRatio = this.water.algae / 100;
         const waterHeight = this.canvas.height * (this.water.level / 100);
         const waterY = this.canvas.height - waterHeight;
@@ -439,6 +489,50 @@ export class AquariumSimulation {
 
         this.ctx.fillStyle = '#2f271c'; this.ctx.fillRect(0, this.canvas.height - 30, this.canvas.width, 30);
         this.ctx.fillStyle = '#4a3f2d'; this.ctx.fillRect(0, this.canvas.height - 25, this.canvas.width, 25);
+
+        // 2. Draw Decorations
+        this.decorations.forEach(d => {
+            this.ctx.save();
+            this.ctx.translate(d.x, d.y);
+            if(d.flip) this.ctx.scale(-1, 1);
+            this.ctx.scale(d.scale, d.scale);
+            this.ctx.fillStyle = d.color;
+            if(d.type === 'rock') {
+                this.ctx.beginPath();
+                this.ctx.moveTo(-40, 0);
+                this.ctx.lineTo(-30, -50);
+                this.ctx.lineTo(10, -70);
+                this.ctx.lineTo(50, -40);
+                this.ctx.lineTo(60, 0);
+                this.ctx.closePath();
+                this.ctx.fill();
+            } else if(d.type === 'wood') {
+                this.ctx.beginPath();
+                this.ctx.moveTo(-60, 0);
+                this.ctx.quadraticCurveTo(-20, -80, 40, -20);
+                this.ctx.lineTo(80, -40);
+                this.ctx.lineTo(100, 0);
+                this.ctx.closePath();
+                this.ctx.fill();
+            } else if(d.type === 'ornament') {
+                if(d.id === 'ornament_2') { // Treasure chest
+                    this.ctx.fillRect(-30, -40, 60, 40);
+                    this.ctx.fillStyle = '#854d0e';
+                    this.ctx.fillRect(-30, -45, 60, 10);
+                    if(Math.random() < 0.1 && timeScale > 0) {
+                        this.bubbles.push({ x: d.x + (Math.random()-0.5)*40, y: d.y - 40, size: 2+Math.random()*3, vy: 1+Math.random(), wobble: Math.random()*Math.PI*2 });
+                    }
+                } else { // Shipwreck
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(-80, 0);
+                    this.ctx.lineTo(-100, -40);
+                    this.ctx.lineTo(20, -20);
+                    this.ctx.lineTo(40, 0);
+                    this.ctx.fill();
+                }
+            }
+            this.ctx.restore();
+        });
 
         for(let plant of this.plants) {
             let actualHeight = Math.min(plant.height, waterHeight - 20); 

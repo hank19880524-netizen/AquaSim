@@ -72,6 +72,18 @@ export interface SystemStats {
     isActive: boolean;
 }
 
+export interface Decoration {
+    id: string;
+    name: string;
+    cost: number;
+    x: number;
+    y: number;
+    scale: number;
+    type: 'rock' | 'wood' | 'ornament';
+    color: string;
+    flip?: boolean;
+}
+
 export interface SaveData {
     volumeLiters: number;
     money: number;
@@ -81,4 +93,6 @@ export interface SaveData {
     plants: Plant[];
     pipeline: (PipelineNode | null)[];
     sysStats: SystemStats;
+    feederLevel?: number;
+    decorations?: Decoration[];
 }

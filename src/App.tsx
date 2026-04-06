@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AquariumSimulation } from './simulation';
-import { FISH_DB, SHRIMP_DB, SNAIL_DB, PLANT_DB, EQUIP_DB, MEDIA_DB } from './constants';
+import { FISH_DB, SHRIMP_DB, SNAIL_DB, PLANT_DB, EQUIP_DB, MEDIA_DB, DECOR_DB, FEEDER_UPGRADES } from './constants';
 import { SaveData } from './types';
 
 const App: React.FC = () => {
@@ -19,6 +19,7 @@ const App: React.FC = () => {
     const [counts, setCounts] = useState({ fish: 0, shrimp: 0, snail: 0, plants: 0, deadFish: 0, deadShrimp: 0, deadSnail: 0 });
     const [showPipeline, setShowPipeline] = useState(false);
     const [selectedNode, setSelectedNode] = useState<number | null>(null);
+    const [shopTab, setShopTab] = useState<'life' | 'potion' | 'decor' | 'upgrade'>('life');
     
     useEffect(() => {
         const saved = localStorage.getItem('aquasim_pro_save');
@@ -33,7 +34,7 @@ const App: React.FC = () => {
         setMoney(s.money);
         const day = Math.floor(s.gameTimeHours / 24) + 1;
         const hour = s.gameTimeHours % 24;
-        setGameTime(`Day ${day} - ${hour.toString().padStart(2, '0')}:00`);
+        setGameTime(`第 ${day} 天 - ${hour.toString().padStart(2, '0')}:00`);
         setIsLeaking(s.sysStats.isLeaking);
         setLightOn(s.lightOn);
         setWaterStats({ ...s.water });
@@ -63,10 +64,17 @@ const App: React.FC = () => {
             if (canvasRef.current) {
                 const newSim = new AquariumSimulation(canvasRef.current, volume, initialMoney, null, updateUI);
                 setSim(newSim);
-                // Expose to window for legacy compatibility if needed, but better to use sim state
                 (window as any).sim = newSim;
             }
         }, 100);
+    };
+
+    const quitGame = () => {
+        if (sim) {
+            sim.stop();
+            setSim(null);
+        }
+        setGameStarted(false);
     };
 
     const loadGame = () => {
@@ -93,7 +101,9 @@ const App: React.FC = () => {
             fishes: sim.fishes,
             plants: sim.plants,
             pipeline: sim.pipeline,
-            sysStats: sim.sysStats
+            sysStats: sim.sysStats,
+            feederLevel: sim.feederLevel,
+            decorations: sim.decorations
         };
         localStorage.setItem('aquasim_pro_save', JSON.stringify(data));
         sim.showActionText('💾 存檔成功');
@@ -101,42 +111,43 @@ const App: React.FC = () => {
 
     if (!gameStarted) {
         return (
-            <div className="fixed inset-0 bg-slate-950 z-[100] flex flex-col items-center justify-center p-6 transition-opacity duration-500">
-                <h1 className="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-4 drop-shadow-lg">
-                    <i className="fa-solid fa-water"></i> AquaSim Pro
-                </h1>
-                <p className="text-slate-400 mb-8 text-lg font-bold">高擬真水族生態模擬器</p>
+            <div className="fixed inset-0 bg-slate-950 z-[100] flex flex-col items-center justify-center p-6 transition-opacity duration-500 overflow-y-auto">
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-2 drop-shadow-lg">
+                        <i className="fa-solid fa-water"></i> AquaSim Pro
+                    </h1>
+                    <p className="text-slate-500 text-sm font-bold uppercase tracking-[0.2em]">專業水族生態模擬系統</p>
+                </div>
                 
                 {hasSave && (
-                    <div className="mb-8 w-full max-w-5xl flex justify-center">
-                        <button onClick={loadGame} className="bg-gradient-to-r from-indigo-600 to-blue-600 border border-blue-400 hover:from-indigo-500 hover:to-blue-500 rounded-xl px-10 py-4 text-white font-bold text-xl shadow-[0_0_20px_rgba(59,130,246,0.5)] transition transform hover:-translate-y-1 flex items-center gap-3">
-                            <i className="fa-solid fa-floppy-disk"></i> 繼續上次的魚缸專案
+                    <div className="mb-8 w-full max-w-4xl flex justify-center">
+                        <button onClick={loadGame} className="bg-slate-900 border border-slate-700 hover:border-indigo-500 hover:bg-slate-800 rounded-lg px-6 py-3 text-white font-bold text-sm shadow-xl transition transform hover:-translate-y-0.5 flex items-center gap-3 group">
+                            <i className="fa-solid fa-floppy-disk text-indigo-400 group-hover:scale-110 transition-transform"></i> 載入存檔專案
                         </button>
                     </div>
                 )}
 
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="h-px w-20 bg-slate-700"></div>
-                    <span className="text-slate-500 font-bold uppercase tracking-widest text-sm">建立新專案 (選擇水體)</span>
-                    <div className="h-px w-20 bg-slate-700"></div>
+                <div className="flex items-center gap-4 mb-6 w-full max-w-md">
+                    <div className="h-px flex-grow bg-slate-800"></div>
+                    <span className="text-slate-600 font-black uppercase tracking-widest text-[10px]">建立新專案</span>
+                    <div className="h-px flex-grow bg-slate-800"></div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl w-full">
-                    <button onClick={() => startGame(30, 150)} className="bg-slate-800 border-2 border-slate-600 hover:border-cyan-400 rounded-2xl p-6 text-left transition transform hover:-translate-y-2 group">
-                        <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-cyan-300"><i className="fa-solid fa-box text-cyan-500 mr-2"></i>奈米缸 (30L)</h3>
-                        <p className="text-slate-400 text-sm mb-4">Hard 困難模式・水量少，毒素累積極快，水質極易震盪。</p>
-                        <div className="text-yellow-400 font-mono font-bold bg-slate-900 px-3 py-1 rounded inline-block">初始資金: $150</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl w-full">
+                    <button onClick={() => startGame(30, 150)} className="bg-slate-900/50 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 rounded-xl p-4 text-left transition group">
+                        <h3 className="text-lg font-bold text-white mb-1 group-hover:text-cyan-400 flex items-center gap-2"><i className="fa-solid fa-box text-cyan-500 text-sm"></i>奈米缸 (30L)</h3>
+                        <p className="text-slate-500 text-[10px] mb-3 leading-relaxed">困難模式・水質極易震盪。</p>
+                        <div className="text-yellow-500/80 font-mono text-[10px] font-bold bg-black/30 px-2 py-0.5 rounded inline-block">資金: $150</div>
                     </button>
-                    <button onClick={() => startGame(100, 300)} className="bg-slate-800 border-2 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:border-cyan-300 rounded-2xl p-6 text-left transition transform hover:-translate-y-2 group relative overflow-hidden">
-                        <div className="absolute -right-4 -top-4 text-cyan-500/20 text-8xl"><i className="fa-solid fa-star"></i></div>
-                        <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-cyan-300"><i className="fa-solid fa-cube text-cyan-400 mr-2"></i>標準缸 (100L)</h3>
-                        <p className="text-slate-400 text-sm mb-4">Normal 標準模式・最適合新手入門的完美比例與緩衝能力。</p>
-                        <div className="text-yellow-400 font-mono font-bold bg-slate-900 px-3 py-1 rounded inline-block">初始資金: $300</div>
+                    <button onClick={() => startGame(100, 300)} className="bg-slate-900/50 border border-cyan-500/30 hover:border-cyan-500 hover:bg-slate-900 rounded-xl p-4 text-left transition group relative overflow-hidden">
+                        <h3 className="text-lg font-bold text-white mb-1 group-hover:text-cyan-400 flex items-center gap-2"><i className="fa-solid fa-cube text-cyan-400 text-sm"></i>標準缸 (100L)</h3>
+                        <p className="text-slate-500 text-[10px] mb-3 leading-relaxed">標準模式・新手入門首選。</p>
+                        <div className="text-yellow-500/80 font-mono text-[10px] font-bold bg-black/30 px-2 py-0.5 rounded inline-block">資金: $300</div>
                     </button>
-                    <button onClick={() => startGame(250, 600)} className="bg-slate-800 border-2 border-slate-600 hover:border-cyan-400 rounded-2xl p-6 text-left transition transform hover:-translate-y-2 group">
-                        <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-cyan-300"><i className="fa-solid fa-boxes-stacked text-blue-500 mr-2"></i>大型缸 (250L)</h3>
-                        <p className="text-slate-400 text-sm mb-4">Easy 簡單模式・擁有強大的水體緩衝力，容錯率極高。</p>
-                        <div className="text-yellow-400 font-mono font-bold bg-slate-900 px-3 py-1 rounded inline-block">初始資金: $600</div>
+                    <button onClick={() => startGame(250, 600)} className="bg-slate-900/50 border border-slate-800 hover:border-blue-500/50 hover:bg-slate-900 rounded-xl p-4 text-left transition group">
+                        <h3 className="text-lg font-bold text-white mb-1 group-hover:text-blue-400 flex items-center gap-2"><i className="fa-solid fa-boxes-stacked text-blue-500 text-sm"></i>大型缸 (250L)</h3>
+                        <p className="text-slate-500 text-[10px] mb-3 leading-relaxed">簡單模式・容錯率極高。</p>
+                        <div className="text-yellow-500/80 font-mono text-[10px] font-bold bg-black/30 px-2 py-0.5 rounded inline-block">資金: $600</div>
                     </button>
                 </div>
             </div>
@@ -177,18 +188,24 @@ const App: React.FC = () => {
                         <div className="text-[10px] sm:text-xs font-mono text-cyan-300 font-bold text-right leading-none mt-0.5">{gameTime}</div>
                     </div>
 
-                    <button onClick={saveGame} className="glass-panel px-2 py-1 rounded-lg border-t-2 border-emerald-500 hover:bg-slate-800 transition flex flex-col items-center justify-center text-emerald-400 group cursor-pointer flex-grow sm:flex-grow-0 min-w-[50px]">
-                        <i className="fa-solid fa-floppy-disk text-xs sm:text-sm mb-0.5 group-hover:scale-110 transition-transform"></i>
-                        <span className="text-[8px] font-bold uppercase leading-none">儲存</span>
-                    </button>
+                    <div className="flex gap-1.5">
+                        <button onClick={saveGame} className="glass-panel px-2 py-1 rounded-lg border-t-2 border-emerald-500 hover:bg-slate-800 transition flex flex-col items-center justify-center text-emerald-400 group cursor-pointer flex-grow sm:flex-grow-0 min-w-[40px]">
+                            <i className="fa-solid fa-floppy-disk text-xs mb-0.5 group-hover:scale-110 transition-transform"></i>
+                            <span className="text-[7px] font-bold uppercase leading-none">儲存</span>
+                        </button>
+                        <button onClick={quitGame} className="glass-panel px-2 py-1 rounded-lg border-t-2 border-slate-500 hover:bg-slate-800 transition flex flex-col items-center justify-center text-slate-400 group cursor-pointer flex-grow sm:flex-grow-0 min-w-[40px]">
+                            <i className="fa-solid fa-arrow-right-from-bracket text-xs mb-0.5 group-hover:translate-x-0.5 transition-transform"></i>
+                            <span className="text-[7px] font-bold uppercase leading-none">選單</span>
+                        </button>
+                    </div>
                 </div>
             </header>
 
-            <main className="w-full max-w-7xl grid grid-cols-1 xl:grid-cols-3 gap-2 sm:gap-4">
+            <main className="w-full max-w-6xl grid grid-cols-1 xl:grid-cols-3 gap-2 sm:gap-4">
                 <div className="xl:col-span-2 flex flex-col gap-2 sm:gap-3">
-                    <div id="tank-container" className="relative w-full aspect-[4/3] sm:aspect-video rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-slate-600 bg-black transition-all overflow-hidden">
+                    <div id="tank-container" className="relative w-full aspect-video rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-slate-600 bg-black transition-all overflow-hidden">
                         <canvas ref={canvasRef} width={2000} height={1000} className="absolute top-0 left-0 w-full h-full z-10 block"></canvas>
-                        <div className={`absolute inset-0 bg-yellow-200 pointer-events-none mix-blend-overlay transition-opacity duration-1000 z-20 ${lightOn ? 'opacity-20' : 'opacity-0'}`}></div>
+                        <div className={`absolute inset-0 bg-slate-950 pointer-events-none transition-opacity duration-1000 z-20 ${lightOn ? 'opacity-0' : 'opacity-60'}`}></div>
                         {isLeaking && (
                             <div className="absolute inset-0 bg-red-500/20 z-30 flex items-center justify-center pointer-events-none">
                                 <div className="bg-red-600/95 text-white px-4 sm:px-8 py-2 sm:py-4 rounded-xl font-bold text-lg sm:text-2xl md:text-3xl tracking-widest animate-pulse border-2 border-white shadow-[0_0_30px_rgba(239,68,68,0.8)] flex items-center gap-2 sm:gap-4 text-center">
@@ -217,90 +234,171 @@ const App: React.FC = () => {
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 border-t border-slate-600/50 pt-1.5 sm:pt-2">
-                            <div className="bg-slate-800/50 p-1.5 sm:p-2 rounded-lg border border-slate-700 flex flex-col justify-between">
-                                <div className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i className="fa-solid fa-store"></i> 活體與植物商店</div>
-                                <div className="flex flex-col gap-1 sm:gap-1.5">
-                                    <div className="flex items-center gap-1.5">
-                                        <select id="fish-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-cyan-500 transition font-medium h-6 sm:h-8">
-                                            {FISH_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
-                                        </select>
-                                        <button onClick={() => {
-                                            const id = (document.getElementById('fish-selector') as HTMLSelectElement).value;
-                                            const f = FISH_DB.find(x => x.id === id);
-                                            if (f && sim && sim.money >= f.cost) {
-                                                sim.money -= f.cost;
-                                                sim.spawnFish(id);
-                                                sim.showActionText(`🐟 購入 ${f.name}`);
-                                                updateUI(sim);
-                                            }
-                                        }} className="bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">買魚</button>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <select id="shrimp-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-rose-500 transition font-medium h-6 sm:h-8">
-                                            {SHRIMP_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
-                                        </select>
-                                        <button onClick={() => {
-                                            const id = (document.getElementById('shrimp-selector') as HTMLSelectElement).value;
-                                            const f = SHRIMP_DB.find(x => x.id === id);
-                                            if (f && sim && sim.money >= f.cost) {
-                                                sim.money -= f.cost;
-                                                sim.spawnFish(id);
-                                                sim.showActionText(`🦐 購入 ${f.name}`);
-                                                updateUI(sim);
-                                            }
-                                        }} className="bg-rose-600 hover:bg-rose-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">買蝦</button>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <select id="snail-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-amber-500 transition font-medium h-6 sm:h-8">
-                                            {SNAIL_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
-                                        </select>
-                                        <button onClick={() => {
-                                            const id = (document.getElementById('snail-selector') as HTMLSelectElement).value;
-                                            const f = SNAIL_DB.find(x => x.id === id);
-                                            if (f && sim && sim.money >= f.cost) {
-                                                sim.money -= f.cost;
-                                                sim.spawnFish(id);
-                                                sim.showActionText(`🐌 購入 ${f.name}`);
-                                                updateUI(sim);
-                                            }
-                                        }} className="bg-amber-600 hover:bg-amber-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">買螺</button>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <select id="plant-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-emerald-500 transition font-medium h-6 sm:h-8">
-                                            {PLANT_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
-                                        </select>
-                                        <button onClick={() => {
-                                            const id = (document.getElementById('plant-selector') as HTMLSelectElement).value;
-                                            const p = PLANT_DB.find(x => x.id === id);
-                                            if (p && sim && sim.money >= p.cost) {
-                                                sim.money -= p.cost;
-                                                sim.spawnPlant(id, Math.random() * 1800 + 100);
-                                                sim.showActionText(`🌿 栽種 ${p.name}`);
-                                                updateUI(sim);
-                                            }
-                                        }} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">栽種</button>
-                                    </div>
-                                </div>
-                            </div>
+                        <div className="flex gap-1 mb-1 border-b border-slate-700 pb-1 overflow-x-auto no-scrollbar pt-1.5 sm:pt-2 border-t border-slate-600/50">
+                            {[
+                                { id: 'life', label: '生物與植物', icon: 'fa-fish' },
+                                { id: 'potion', label: '專業藥水', icon: 'fa-flask-vial' },
+                                { id: 'decor', label: '魚缸造景', icon: 'fa-mountain' },
+                                { id: 'upgrade', label: '設備升級', icon: 'fa-arrow-up-right-dots' }
+                            ].map(tab => (
+                                <button 
+                                    key={tab.id}
+                                    onClick={() => setShopTab(tab.id as any)}
+                                    className={`px-2 py-1 rounded text-[9px] sm:text-[10px] font-bold whitespace-nowrap transition flex items-center gap-1 ${shopTab === tab.id ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                >
+                                    <i className={`fa-solid ${tab.icon}`}></i> {tab.label}
+                                </button>
+                            ))}
+                        </div>
 
-                            <div className="bg-slate-800/50 p-1.5 sm:p-2 rounded-lg border border-slate-700 flex flex-col">
-                                <div className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1"><i className="fa-solid fa-flask-vial"></i> 專業藥水</div>
-                                <div className="grid grid-cols-2 gap-1 sm:gap-1.5 h-full pb-0.5">
-                                    <button onClick={() => sim?.useItem('seed')} className="bg-purple-600/80 hover:bg-purple-500 text-white py-1 rounded border border-purple-500/50 shadow transition flex items-center justify-center gap-1 sm:gap-1.5 text-[9px] sm:text-[10px] font-bold w-full">
-                                        <i className="fa-solid fa-bacteria"></i><span>Seed</span><span className="text-purple-200 font-mono text-[7px] sm:text-[8px] bg-black/20 px-0.5 rounded">$15</span>
+                        <div className="min-h-[100px]">
+                            {shopTab === 'life' && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div className="bg-slate-800/50 p-1.5 sm:p-2 rounded-lg border border-slate-700 flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <select id="fish-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-cyan-500 transition font-medium h-6 sm:h-8">
+                                                {FISH_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
+                                            </select>
+                                            <button onClick={() => {
+                                                const id = (document.getElementById('fish-selector') as HTMLSelectElement).value;
+                                                const f = FISH_DB.find(x => x.id === id);
+                                                if (f && sim && sim.money >= f.cost) {
+                                                    sim.money -= f.cost;
+                                                    sim.spawnFish(id);
+                                                    sim.showActionText(`🐟 購入 ${f.name}`);
+                                                    updateUI(sim);
+                                                }
+                                            }} className="bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">買魚</button>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <select id="shrimp-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-rose-500 transition font-medium h-6 sm:h-8">
+                                                {SHRIMP_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
+                                            </select>
+                                            <button onClick={() => {
+                                                const id = (document.getElementById('shrimp-selector') as HTMLSelectElement).value;
+                                                const f = SHRIMP_DB.find(x => x.id === id);
+                                                if (f && sim && sim.money >= f.cost) {
+                                                    sim.money -= f.cost;
+                                                    sim.spawnFish(id);
+                                                    sim.showActionText(`🦐 購入 ${f.name}`);
+                                                    updateUI(sim);
+                                                }
+                                            }} className="bg-rose-600 hover:bg-rose-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">買蝦</button>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-800/50 p-1.5 sm:p-2 rounded-lg border border-slate-700 flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <select id="snail-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-amber-500 transition font-medium h-6 sm:h-8">
+                                                {SNAIL_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
+                                            </select>
+                                            <button onClick={() => {
+                                                const id = (document.getElementById('snail-selector') as HTMLSelectElement).value;
+                                                const f = SNAIL_DB.find(x => x.id === id);
+                                                if (f && sim && sim.money >= f.cost) {
+                                                    sim.money -= f.cost;
+                                                    sim.spawnFish(id);
+                                                    sim.showActionText(`🐌 購入 ${f.name}`);
+                                                    updateUI(sim);
+                                                }
+                                            }} className="bg-amber-600 hover:bg-amber-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">買螺</button>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <select id="plant-selector" className="bg-slate-900 text-white text-[10px] sm:text-xs rounded px-1 py-0.5 flex-grow border border-slate-600 focus:outline-none focus:border-emerald-500 transition font-medium h-6 sm:h-8">
+                                                {PLANT_DB.map(f => <option key={f.id} value={f.id}>{f.name} (${f.cost})</option>)}
+                                            </select>
+                                            <button onClick={() => {
+                                                const id = (document.getElementById('plant-selector') as HTMLSelectElement).value;
+                                                const p = PLANT_DB.find(x => x.id === id);
+                                                if (p && sim && sim.money >= p.cost) {
+                                                    sim.money -= p.cost;
+                                                    sim.spawnPlant(id, Math.random() * 1800 + 100);
+                                                    sim.showActionText(`🌿 栽種 ${p.name}`);
+                                                    updateUI(sim);
+                                                }
+                                            }} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 rounded shadow transition text-[9px] sm:text-[10px] font-bold whitespace-nowrap w-10 h-6 sm:h-8 flex items-center justify-center">栽種</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {shopTab === 'potion' && (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    <button onClick={() => sim?.useItem('seed')} className="bg-purple-600/80 hover:bg-purple-500 text-white p-2 rounded border border-purple-500/50 shadow transition flex flex-col items-center justify-center gap-1 text-[9px] sm:text-[10px] font-bold">
+                                        <i className="fa-solid fa-bacteria text-sm"></i><span>硝化菌</span><span className="text-purple-200 font-mono text-[7px] sm:text-[8px] bg-black/20 px-1 rounded">$15</span>
                                     </button>
-                                    <button onClick={() => sim?.useItem('envy')} className="bg-emerald-600/80 hover:bg-emerald-500 text-white py-1 rounded border border-emerald-500/50 shadow transition flex items-center justify-center gap-1 sm:gap-1.5 text-[9px] sm:text-[10px] font-bold w-full">
-                                        <i className="fa-solid fa-leaf"></i><span>Envy</span><span className="text-emerald-200 font-mono text-[7px] sm:text-[8px] bg-black/20 px-0.5 rounded">$10</span>
+                                    <button onClick={() => sim?.useItem('envy')} className="bg-emerald-600/80 hover:bg-emerald-500 text-white p-2 rounded border border-emerald-500/50 shadow transition flex flex-col items-center justify-center gap-1 text-[9px] sm:text-[10px] font-bold">
+                                        <i className="fa-solid fa-leaf text-sm"></i><span>液肥</span><span className="text-emerald-200 font-mono text-[7px] sm:text-[8px] bg-black/20 px-1 rounded">$10</span>
                                     </button>
-                                    <button onClick={() => sim?.useItem('kh')} className="bg-blue-600/80 hover:bg-blue-500 text-white py-1 rounded border border-blue-500/50 shadow transition flex items-center justify-center gap-1 sm:gap-1.5 text-[9px] sm:text-[10px] font-bold w-full">
-                                        <i className="fa-solid fa-vial"></i><span>KH+</span><span className="text-blue-200 font-mono text-[7px] sm:text-[8px] bg-black/20 px-0.5 rounded">$5</span>
+                                    <button onClick={() => sim?.useItem('kh')} className="bg-blue-600/80 hover:bg-blue-500 text-white p-2 rounded border border-blue-500/50 shadow transition flex flex-col items-center justify-center gap-1 text-[9px] sm:text-[10px] font-bold">
+                                        <i className="fa-solid fa-vial text-sm"></i><span>KH+</span><span className="text-blue-200 font-mono text-[7px] sm:text-[8px] bg-black/20 px-1 rounded">$5</span>
                                     </button>
-                                    <button onClick={() => sim?.useItem('gh')} className="bg-indigo-600/80 hover:bg-indigo-500 text-white py-1 rounded border border-indigo-500/50 shadow transition flex items-center justify-center gap-1 sm:gap-1.5 text-[9px] sm:text-[10px] font-bold w-full">
-                                        <i className="fa-solid fa-flask"></i><span>GH+</span><span className="text-indigo-200 font-mono text-[7px] sm:text-[8px] bg-black/20 px-0.5 rounded">$5</span>
+                                    <button onClick={() => sim?.useItem('gh')} className="bg-indigo-600/80 hover:bg-indigo-500 text-white p-2 rounded border border-indigo-500/50 shadow transition flex flex-col items-center justify-center gap-1 text-[9px] sm:text-[10px] font-bold">
+                                        <i className="fa-solid fa-flask text-sm"></i><span>GH+</span><span className="text-indigo-200 font-mono text-[7px] sm:text-[8px] bg-black/20 px-1 rounded">$5</span>
                                     </button>
                                 </div>
-                            </div>
+                            )}
+
+                            {shopTab === 'decor' && (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    {DECOR_DB.map(d => (
+                                        <button 
+                                            key={d.id}
+                                            onClick={() => { sim?.spawnDecoration(d.id); updateUI(sim!); }}
+                                            disabled={sim && sim.money < d.cost}
+                                            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 p-2 rounded-lg transition flex flex-col items-center gap-1 group"
+                                        >
+                                            <div className="w-8 h-8 rounded flex items-center justify-center text-slate-400 group-hover:text-cyan-400" style={{ color: d.color }}>
+                                                <i className={`fa-solid ${d.type === 'rock' ? 'fa-mountain' : (d.type === 'wood' ? 'fa-tree' : 'fa-anchor')}`}></i>
+                                            </div>
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-300">{d.name}</span>
+                                            <span className="text-[8px] font-mono text-cyan-500">${d.cost}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {shopTab === 'upgrade' && (
+                                <div className="grid grid-cols-1 gap-2">
+                                    {FEEDER_UPGRADES.map(u => {
+                                        const isCurrent = sim?.feederLevel === u.level;
+                                        const isNext = sim?.feederLevel === u.level - 1;
+                                        const isLocked = u.level > (sim?.feederLevel || 0) + 1;
+                                        const isOwned = u.level <= (sim?.feederLevel || 0);
+
+                                        return (
+                                            <button 
+                                                key={u.level}
+                                                onClick={() => { if(isNext) { sim?.upgradeFeeder(); updateUI(sim!); } }}
+                                                disabled={!isNext || (sim && sim.money < u.cost)}
+                                                className={`p-2 rounded-lg border transition flex items-center justify-between gap-3 ${
+                                                    isOwned ? 'bg-emerald-900/20 border-emerald-500/30 opacity-60' :
+                                                    isNext ? 'bg-slate-800 border-cyan-500/50 hover:bg-slate-700' :
+                                                    'bg-slate-900 border-slate-800 opacity-40'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isOwned ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                                                        <i className={`fa-solid ${u.level >= 2 ? 'fa-robot' : 'fa-hand-pointer'}`}></i>
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="text-[10px] font-black text-white uppercase">{u.name}</div>
+                                                        <div className="text-[8px] text-slate-500">{u.desc}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    {isOwned ? (
+                                                        <span className="text-[9px] font-black text-emerald-400 uppercase">已擁有</span>
+                                                    ) : isLocked ? (
+                                                        <i className="fa-solid fa-lock text-slate-600"></i>
+                                                    ) : (
+                                                        <span className="text-[10px] font-mono font-bold text-cyan-400">${u.cost}</span>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -561,8 +659,8 @@ const App: React.FC = () => {
                                         <i className="fa-solid fa-circle-info"></i> 專家建議
                                     </h4>
                                     <p className="text-[9px] text-amber-200/70 leading-relaxed">
-                                        管路系統必須包含一個 <span className="text-amber-300 font-bold">Intake (入水)</span> 與一個 <span className="text-amber-300 font-bold">Outflow (出水)</span> 組件才能形成迴路。
-                                        若迴路中斷且馬達仍在運轉，將會導致漏水。定期清洗濾棉 (Mech) 可維持系統流量。
+                                        管路系統必須包含一個 <span className="text-amber-300 font-bold">入水口 (Intake)</span> 與一個 <span className="text-amber-300 font-bold">出水口 (Outflow)</span> 組件才能形成迴路。
+                                        若迴路中斷且馬達仍在運轉，將會導致漏水。定期清洗濾棉 (物理過濾) 可維持系統流量。
                                     </p>
                                 </div>
                             </div>
