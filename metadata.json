@@ -1,0 +1,5 @@
+{
+  "name": "ScriptToBoard AI",
+  "description": "Transform your scripts into visual storyboards using Gemini AI and high-quality image generation.",
+  "requestFramePermissions": []
+}
